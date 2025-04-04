@@ -1,4 +1,5 @@
 #include "vec3.h"
+#include <cmath>
 
 void Vec3::zero()
 {
@@ -41,4 +42,14 @@ Vec3 Vec3::operator*(float scalar) const
 Vec3 Vec3::operator/(float scalar) const
 {
   return Vec3{x / scalar, y / scalar, z / scalar};
+}
+
+float Vec3::len2()
+{
+  return x * x + y * y + z * z;
+}
+
+float Vec3::len()
+{
+  return std::sqrt(x * x + y * y + z * z);
 }

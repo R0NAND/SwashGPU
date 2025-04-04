@@ -20,5 +20,5 @@ void Particle::update(float dt)
 
 void Particle::addForce(Vec3 f)
 {
-  acc += f / mass;
+  acc += f / dens;
 }

@@ -5,13 +5,14 @@ const width = window.innerWidth;
 const height = window.innerHeight;
 
 const camera = new THREE.PerspectiveCamera(70, width / height, 0.01, 100);
-camera.position.x = 50;
-camera.position.y = 50;
-camera.position.z = 50;
 
+camera.position.x = 30;
+camera.position.y = 60;
+camera.position.z = 30;
+camera.lookAt(50, 50, 0);
 const scene = new THREE.Scene();
 
-const geometry = new THREE.SphereGeometry(0.2);
+const geometry = new THREE.SphereGeometry(0.4);
 const material = new THREE.MeshNormalMaterial();
 
 const n = 1000;
@@ -26,7 +27,7 @@ loadWasm().then((w) => {
   const step = () => {
     const ptr = w._updateSim(sim);
     const dummy = new THREE.Object3D();
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 175; i++) {
       let x = w.HEAPF32[ptr / 4 + i * 18];
       let y = w.HEAPF32[ptr / 4 + i * 18 + 1];
       let z = w.HEAPF32[ptr / 4 + i * 18 + 2];

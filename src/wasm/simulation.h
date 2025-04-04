@@ -12,5 +12,9 @@ struct Simulation
   SearchGrid search_grid;
   Vec3 gravity;
 
+  float k_poly_6;
+  float k_spiky;
+  float k_visc;
+
   void update(float dt);
 };

@@ -10,4 +10,7 @@ struct Vec3
   Vec3 &operator*=(float scalar);
   Vec3 operator*(float scalar) const;
   Vec3 operator/(float scalar) const;
+
+  float len2();
+  float len();
 };
