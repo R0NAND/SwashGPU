@@ -1221,7 +1221,7 @@ var wasmImports = {
 var wasmExports = await createWasm();
 var ___wasm_call_ctors = createExportWrapper('__wasm_call_ctors', 0);
 var _updateSim = Module['_updateSim'] = createExportWrapper('updateSim', 1);
-var _initializeSim = Module['_initializeSim'] = createExportWrapper('initializeSim', 0);
+var _initializeSim = Module['_initializeSim'] = createExportWrapper('initializeSim', 6);
 var _fflush = createExportWrapper('fflush', 1);
 var _strerror = createExportWrapper('strerror', 1);
 var _emscripten_stack_init = wasmExports['emscripten_stack_init']

@@ -3,22 +3,28 @@
 #include <emscripten/emscripten.h>
 #include <iostream>
 
-Simulation::Simulation()
+Simulation::Simulation(float _kernel_r, float _mass, float _visc, float _repulse, float _restDens, float _st)
 {
-  kernel_r = 1.5f;
+  kernel_r = _kernel_r;
+  kernel_r2 = kernel_r * kernel_r;
+  mass = _mass;
+  visc = _visc;
+  st = _st;
+  repulsion = _repulse;
+  restDens = _restDens;
   k_poly_6 = 315.0f / (64.0f * M_PI * pow(kernel_r, 9));
-  k_spiky = 15.0f / (M_PI * pow(kernel_r, 6));
+  k_lap_poly_6 = 945.0f / (32.0f * M_PI * pow(kernel_r, 9));
+  k_spiky = 45.0f / (M_PI * pow(kernel_r, 6));
   k_visc = 45.0f / (M_PI * pow(kernel_r, 6));
-  bounds[0] = Vec3{0.0f, 0.0f, 0.0f};
-  bounds[1] = Vec3{10.0f, 10.0f, 10.0f};
+  bounds = Vec3{10.0f, 10.0f, 10.0f};
   gravity = Vec3{0.0f, -2.0f, 0.0f};
-  for (int x = 0; x < 5; ++x)
+  for (int x = 0; x < 6; ++x)
   {
-    for (int y = 0; y < 7; ++y)
+    for (int y = 0; y < 9; ++y)
     {
-      for (int z = 0; z < 5; ++z)
+      for (int z = 0; z < 6; ++z)
       {
-        particles.emplace_back(Vec3{0.5f + x * 1.3f, 0.5f + y * 1.3f, 0.5f + z * 1.3f}, 1, 0.2, 1000.0f, 0.01f);
+        particles.emplace_back(Vec3{0.5f + x * 1.0f, 1.5f + y * 1.0f, 0.5f + z * 1.0f});
       }
     }
   }
@@ -27,7 +33,7 @@ Simulation::Simulation()
 
 void Simulation::update(float dt)
 {
-  search_grid.grid_map.clear();
+  search_grid.clear();
   for (auto &pi : particles)
   {
     search_grid.insert(pi);
@@ -36,52 +42,55 @@ void Simulation::update(float dt)
   // calculate density and pressure
   for (auto &pi : particles)
   {
-    std::vector<Particle *> neighbors = search_grid.getNeighbors(pi);
-    for (auto *pj : search_grid.getNeighbors(pi))
+    for (const auto &group : search_grid.getNeighbors(pi))
     {
-      if (abs(pi.pos.x - pj->pos.x) < kernel_r && abs(pi.pos.y - pj->pos.y) < kernel_r && abs(pi.pos.z - pj->pos.z) < kernel_r)
+      for (auto *pj : group)
       {
-        if ((pi.pos - pj->pos).len2() < kernel_r * kernel_r)
+        float r2 = (pi.pos - pj->pos).len2();
+        if (r2 < kernel_r2)
         {
-          float r2 = (pi.pos - pj->pos).len2();
-          pi.dens += pj->mass * k_poly_6 * pow(kernel_r * kernel_r - r2, 3);
+          pi.dens += k_poly_6 * pow(kernel_r2 - r2, 3);
         }
       }
-      pi.press = pi.c * (pi.dens - pi.restDens);
     }
+    pi.dens *= mass;
+    pi.press = repulsion * (pi.dens - restDens);
   }
 
   // calculate forces
   for (auto &pi : particles)
   {
-    for (auto *pj : search_grid.getNeighbors(pi))
+    for (const auto &group : search_grid.getNeighbors(pi))
     {
-      if (abs(pi.pos.x - pj->pos.x) < kernel_r && abs(pi.pos.y - pj->pos.y) < kernel_r && abs(pi.pos.z - pj->pos.z) < kernel_r)
+      for (auto *pj : group)
       {
-        if ((pi.pos - pj->pos).len2() < kernel_r * kernel_r)
+        if (&pi < pj)
         {
-          if (&pi != pj)
+          float r2 = (pi.pos - pj->pos).len2();
+          if (r2 < kernel_r2)
           {
             Vec3 ij = pi.pos - pj->pos;
-            float r = ij.len();
-            if (&pi < pj)
-            {
-              // pressure
-              float avg_press = (pi.press + pj->press) / 2.0f;
-              float common_term = (avg_press / pi.dens) * k_spiky * pow(kernel_r - r, 3);
-              float f_press_i = pj->mass * common_term;
-              float f_press_j = pi.mass * common_term;
-              pi.addForce((ij / r) * f_press_i);
-              pj->addForce((ij / r) * -f_press_j);
+            float r = sqrt(r2);
+            float delta_r = kernel_r - r;
 
-              // viscosity
-              Vec3 vel_ij = pi.vel - pj->vel;
-              Vec3 common_vec = vel_ij * (k_visc * (kernel_r - r));
-              Vec3 f_visc_i = common_vec * -1.0f * pi.visc / pj->mass / pj->dens;
-              Vec3 f_visc_j = common_vec * pj->visc / pi.mass / pi.dens;
-              pi.addForce(f_visc_i);
-              pj->addForce(f_visc_j);
-            }
+            // pressure
+            float avg_press = (pi.press + pj->press) / 2.0f;
+            float f_press_i = mass * (avg_press / pi.dens) * k_spiky * pow(delta_r, 2);
+            Vec3 normalized_dir = ij / r;
+            pi.addForce(normalized_dir * f_press_i);
+            pj->addForce(normalized_dir * -f_press_i);
+
+            // viscosity
+            Vec3 vel_ij = pi.vel - pj->vel;
+            Vec3 f_visc = vel_ij * (k_visc * (delta_r)) * visc / mass / pj->dens;
+            pi.addForce(f_visc * -1.0f);
+            pj->addForce(f_visc);
+
+            // Surface tension
+            float n = mass / pi.dens * k_poly_6 * pow((kernel_r2 - r2), 2);
+            float surface_force = st * (mass / pi.dens) * k_lap_poly_6 * (kernel_r2 - r2) * (3 * kernel_r2 - r2) * n / std::abs(n);
+            pi.addForce(normalized_dir * -surface_force);
+            pj->addForce(normalized_dir * surface_force);
           }
         }
       }
@@ -91,32 +100,35 @@ void Simulation::update(float dt)
   for (auto &pi : particles)
   {
     pi.addForce(gravity);
-    //  std::cout << "gravity added";
-    //  std::cout << pi.acc.y << std::endl;
     pi.update(dt);
-    if (pi.pos.y <= bounds[0].y)
+    if (pi.pos.x <= 0)
     {
-      pi.pos.y = bounds[0].y + 0.001;
+      pi.pos.x = 0;
+      pi.vel.x = pi.vel.x * -0.5;
+    }
+    if (pi.pos.y <= 0)
+    {
+      pi.pos.y = 0;
       pi.vel.y = pi.vel.y * -0.5;
     }
-    if (pi.pos.x <= bounds[0].x)
+    if (pi.pos.z <= 0)
     {
-      pi.pos.x = bounds[0].x + 0.001;
-      pi.vel.x = pi.vel.x * -0.5;
-    }
-    if (pi.pos.z <= bounds[0].z)
-    {
-      pi.pos.z = bounds[0].z + 0.001;
+      pi.pos.z = 0;
       pi.vel.z = pi.vel.z * -0.5;
     }
-    if (pi.pos.x >= bounds[1].x)
+    if (pi.pos.x >= bounds.x)
     {
-      pi.pos.x = bounds[1].x - 0.001;
+      pi.pos.x = bounds.x;
       pi.vel.x = pi.vel.x * -0.5;
     }
-    if (pi.pos.z >= bounds[1].z)
+    if (pi.pos.y >= bounds.y)
     {
-      pi.pos.z = bounds[1].z - 0.001;
+      pi.pos.y = bounds.y;
+      pi.vel.y = pi.vel.y * -0.5;
+    }
+    if (pi.pos.z >= bounds.z)
+    {
+      pi.pos.z = bounds.z;
       pi.vel.z = pi.vel.z * -0.5;
     }
   }
@@ -134,8 +146,8 @@ EXTERN EMSCRIPTEN_KEEPALIVE Particle *updateSim(Simulation *s)
   return s->particles.data();
 }
 
-EXTERN EMSCRIPTEN_KEEPALIVE Simulation *initializeSim()
+EXTERN EMSCRIPTEN_KEEPALIVE Simulation *initializeSim(float _kernel_r, float _mass, float _visc, float _repulse, float _restDens, float _st)
 {
-  Simulation *sim = new Simulation();
+  Simulation *sim = new Simulation(_kernel_r, _mass, _visc, _repulse, _restDens, _st);
   return sim;
 }
