@@ -16,15 +16,15 @@ Simulation::Simulation(float _kernel_r, float _mass, float _visc, float _repulse
   k_lap_poly_6 = 945.0f / (32.0f * M_PI * pow(kernel_r, 9));
   k_spiky = 45.0f / (M_PI * pow(kernel_r, 6));
   k_visc = 45.0f / (M_PI * pow(kernel_r, 6));
-  bounds = Vec3{10.0f, 10.0f, 10.0f};
-  gravity = Vec3{0.0f, -2.0f, 0.0f};
-  for (int x = 0; x < 6; ++x)
+  bounds = Vec3{6.5f, 10.0f, 6.5f};
+  gravity = Vec3{0.0f, -1.0f, 0.0f};
+  for (int x = 0; x < 7; ++x)
   {
-    for (int y = 0; y < 9; ++y)
+    for (int y = 0; y < 7; ++y)
     {
-      for (int z = 0; z < 6; ++z)
+      for (int z = 0; z < 7; ++z)
       {
-        particles.emplace_back(Vec3{0.5f + x * 1.0f, 1.5f + y * 1.0f, 0.5f + z * 1.0f});
+        particles.emplace_back(Vec3{0.5f + x * 0.8f, 3.5f + y * 0.8f, 0.5f + z * 0.8f});
       }
     }
   }
@@ -82,7 +82,7 @@ void Simulation::update(float dt)
 
             // viscosity
             Vec3 vel_ij = pi.vel - pj->vel;
-            Vec3 f_visc = vel_ij * (k_visc * (delta_r)) * visc / mass / pj->dens;
+            Vec3 f_visc = vel_ij * k_visc * delta_r * visc * mass / pj->dens;
             pi.addForce(f_visc * -1.0f);
             pj->addForce(f_visc);
 
@@ -103,32 +103,32 @@ void Simulation::update(float dt)
     pi.update(dt);
     if (pi.pos.x <= 0)
     {
-      pi.pos.x = 0;
+      pi.pos.x = 0.001;
       pi.vel.x = pi.vel.x * -0.5;
     }
     if (pi.pos.y <= 0)
     {
-      pi.pos.y = 0;
+      pi.pos.y = 0.001;
       pi.vel.y = pi.vel.y * -0.5;
     }
     if (pi.pos.z <= 0)
     {
-      pi.pos.z = 0;
+      pi.pos.z = 0.001;
       pi.vel.z = pi.vel.z * -0.5;
     }
     if (pi.pos.x >= bounds.x)
     {
-      pi.pos.x = bounds.x;
+      pi.pos.x = bounds.x - 0.001;
       pi.vel.x = pi.vel.x * -0.5;
     }
     if (pi.pos.y >= bounds.y)
     {
-      pi.pos.y = bounds.y;
+      pi.pos.y = bounds.y - 0.001;
       pi.vel.y = pi.vel.y * -0.5;
     }
     if (pi.pos.z >= bounds.z)
     {
-      pi.pos.z = bounds.z;
+      pi.pos.z = bounds.z - 0.001;
       pi.vel.z = pi.vel.z * -0.5;
     }
   }
@@ -142,7 +142,7 @@ void Simulation::update(float dt)
 
 EXTERN EMSCRIPTEN_KEEPALIVE Particle *updateSim(Simulation *s)
 {
-  s->update(0.01666666);
+  s->update(0.0166666666f);
   return s->particles.data();
 }
 

@@ -6,7 +6,7 @@ struct Particle
   Particle(Vec3 _pos);
   Vec3 pos;
   Vec3 vel;
-  Vec3 acc;
+  Vec3 force;
   float dens;
   float press;
   void addForce(Vec3 f);

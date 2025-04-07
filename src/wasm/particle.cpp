@@ -7,14 +7,14 @@ Particle::Particle(Vec3 _pos)
 
 void Particle::update(float dt)
 {
-  vel += acc * dt;
+  vel += force / dens * dt;
   pos += vel * dt;
-  acc.zero();
+  force.zero();
   dens = 0;
   press = 0;
 }
 
 void Particle::addForce(Vec3 f)
 {
-  acc += f / dens;
+  force += f;
 }
