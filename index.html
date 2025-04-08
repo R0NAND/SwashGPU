@@ -12,13 +12,8 @@
   <div id="app"></div>
   <script type="module" src="/src/scene.ts"></script>
   <script>
-    function run_wasm() {
-      WebAssembly.instantiateStreaming(fetch("src/wasm/test.wasm"), {}).then(results => {
-        console.log("ayooo, it works!")
-      })
-    }
   </script>
-  <button onclick="run_wasm()">run</button>
+  <label id="fps"></label>
 </body>
 
 </html>

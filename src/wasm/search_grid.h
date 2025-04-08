@@ -12,11 +12,12 @@ struct SearchGrid
   int n_cells_x;
   int n_cells_y;
   int n_cells_z;
-  std::unordered_map<int, std::vector<Particle *>> grid_map;
-  std::vector<Particle *> *arr_map;
+  Vec3 offsets[27] = {
+      {-1, -1, -1}, {-1, -1, 0}, {-1, -1, 1}, {-1, 0, -1}, {-1, 0, 0}, {-1, 0, 1}, {-1, 1, -1}, {-1, 1, 0}, {-1, 1, 1}, {0, -1, -1}, {0, -1, 0}, {0, -1, 1}, {0, 0, -1}, {0, 0, 0}, {0, 0, 1}, {0, 1, -1}, {0, 1, 0}, {0, 1, 1}, {1, -1, -1}, {1, -1, 0}, {1, -1, 1}, {1, 0, -1}, {1, 0, 0}, {1, 0, 1}, {1, 1, -1}, {1, 1, 0}, {1, 1, 1}};
+  std::vector<std::vector<int>> grid_map;
 
   int getCell(const Vec3 &pos);
-  void insert(Particle &ptcl);
+  void insert(const Vec3 &pos, int index);
   void clear();
-  std::vector<std::vector<Particle *>> getNeighbors(const Particle &ptcl);
+  std::vector<std::vector<int>> getNeighbors(const Particle &ptcl);
 };

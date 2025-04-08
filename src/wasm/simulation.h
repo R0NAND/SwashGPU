@@ -1,7 +1,8 @@
 #pragma once
 #include <vector>
-#include "particle.h"
 #include "search_grid.h"
+
+constexpr int n = 512;
 
 struct Simulation
 {
@@ -14,7 +15,12 @@ struct Simulation
   float repulsion;
   float restDens;
   float st; // surface tension
-  std::vector<Particle> particles;
+  Vec3 pos[n] = {};
+  Vec3 vel[n] = {};
+  Vec3 force[n] = {};
+  float density[n] = {};
+  float pressure[n] = {};
+
   SearchGrid search_grid;
   Vec3 gravity;
 

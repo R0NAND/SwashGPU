@@ -17,7 +17,11 @@ SearchGrid::SearchGrid(Vec3 _bounds, float _cell_size)
   n_cells_x = ceil((bounds.x) / cell_size);
   n_cells_y = ceil((bounds.y) / cell_size);
   n_cells_z = ceil((bounds.z) / cell_size);
-  arr_map = new std::vector<Particle *>[n_cells_x * n_cells_y * n_cells_z];
+  grid_map.resize(n_cells_x * n_cells_y * n_cells_z);
+  for (auto &cell : grid_map)
+  {
+    cell.reserve(20);
+  }
 }
 
 int SearchGrid::getCell(const Vec3 &pos)
@@ -38,32 +42,28 @@ void SearchGrid::clear()
 {
   for (int i = 0; i < n_cells_x * n_cells_y * n_cells_z; ++i)
   {
-    arr_map[i].clear();
+    grid_map[i].clear();
   }
 }
 
-void SearchGrid::insert(Particle &ptcl)
+void SearchGrid::insert(const Vec3 &pos, int index)
 {
-  // grid_map[getCell(ptcl.pos)].push_back(&ptcl);
-  arr_map[getCell(ptcl.pos)].push_back(&ptcl);
+  grid_map[getCell(pos)].push_back(index);
 }
 
-std::vector<std::vector<Particle *>> SearchGrid::getNeighbors(const Particle &ptcl)
+std::vector<std::vector<int>> SearchGrid::getNeighbors(const Particle &ptcl)
 {
-  std::vector<std::vector<Particle *>> neighbors;
+  std::vector<std::vector<int>> neighbors;
   int starting_cell = getCell(ptcl.pos);
-  for (int dx = -1; dx <= 1; ++dx)
+  for (auto &offset : offsets)
   {
-    for (int dy = -1; dy <= 1; ++dy)
+    int key = getCell(ptcl.pos + offset * cell_size);
+    if (key != -1)
     {
-      for (int dz = -1; dz <= 1; ++dz)
+      std::vector<int> cell_indices = grid_map[key];
+      if (cell_indices.size())
       {
-        int key = getCell(ptcl.pos + Vec3{
-                                         dx * cell_size, dy * cell_size, dz * cell_size});
-        if (key != -1 && arr_map[key].size())
-        {
-          neighbors.push_back(arr_map[key]);
-        }
+        neighbors.push_back(grid_map[key]);
       }
     }
   }
