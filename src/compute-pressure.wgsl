@@ -29,7 +29,7 @@ struct SimParams{
 @group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
 @compute @workgroup_size(256)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  for(var i = 0; i < 1000; i = i + 1){
+  for(var i = 0; i < sim_params.n; i = i + 1){
     var dx: vec3<f32> = particles[global_id.x].position - particles[i].position;
     var r2: f32 = dot(dx, dx);
     if(r2 < sim_params.kernel_r2){

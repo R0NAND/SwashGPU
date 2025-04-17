@@ -40,16 +40,16 @@ struct SimParams{
       particles[global_id.x].position.x = 0.0;
       particles[global_id.x].velocity.x *= -0.95;
     }
-    if particles[global_id.x].position.x > 10.0 {
-      particles[global_id.x].position.x = 10.0;
+    if particles[global_id.x].position.x > 100.0 {
+      particles[global_id.x].position.x = 100.0;
       particles[global_id.x].velocity.x *= -0.95;
     }
     if particles[global_id.x].position.z < 0.0 {
       particles[global_id.x].position.z = 0.0;
       particles[global_id.x].velocity.z *= -0.95;
     }
-    if particles[global_id.x].position.z > 10.0 {
-      particles[global_id.x].position.z = 10.0;
+    if particles[global_id.x].position.z > 100.0 {
+      particles[global_id.x].position.z = 100.0;
       particles[global_id.x].velocity.z *= -0.95;
     }
     particles[global_id.x].net_force = vec3(0.0, 0.0, 0.0);
