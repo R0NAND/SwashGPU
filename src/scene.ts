@@ -73,9 +73,9 @@ const kernel_r = 2;
 const kernel_r2 = kernel_r * kernel_r;
 const mass = 1.0;
 const viscosity = 0.5;
-const stiffness = 20;
+const stiffness = 10;
 const restDensity = 0.1;
-const surfaceTension = 3.0;
+const surfaceTension = 2.0;
 
 const k_poly_6 = 315.0 / (64.0 * Math.PI * Math.pow(kernel_r, 9));
 const k_lap_poly_6 = 945.0 / (32.0 * Math.PI * Math.pow(kernel_r, 9));
@@ -99,7 +99,7 @@ f32[10] = k_spiky;
 f32[11] = k_visc;
 i32[12] = n_particles; //n_particles
 f32[16] = 0.0; //gravity
-f32[17] = -1.0; //gravity
+f32[17] = -0.5; //gravity
 f32[18] = 0.0; //gravity
 
 const renderPoints = (points: Float32Array) => {

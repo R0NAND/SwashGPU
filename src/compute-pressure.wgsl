@@ -30,10 +30,10 @@ struct SimParams{
 @compute @workgroup_size(256)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
   for(var i = 0; i < 1000; i = i + 1){
-    var dx = particles[global_id.x].position - particles[i].position;
-    var r2 = dot(dx, dx);
+    var dx: vec3<f32> = particles[global_id.x].position - particles[i].position;
+    var r2: f32 = dot(dx, dx);
     if(r2 < sim_params.kernel_r2){
-      var dist = sqrt(r2);
+      var dist: f32 = sqrt(r2);
       particles[global_id.x].density += sim_params.k_poly_6 * pow(sim_params.kernel_r2 - r2, 3.0);
     }
   }
