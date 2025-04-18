@@ -12,5 +12,4 @@ export default defineConfig({
       include: "**/*.wgsl",
     }),
   ],
-  assetsInclude: ["**/*.wasm"],
 });
