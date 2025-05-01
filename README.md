@@ -1,3 +1,3 @@
-Work in progress. Current demo can be run on most modern devices and browsers below.
+Hardware accelerate 3D smoothed particle hydrodynamics fluid simulation implemented with WebGPU and Vite.
 
-https://sph-fluid-sim.ronantunney.ca/
+Live Demo: https://swash-gpu.ronantunney.ca/
