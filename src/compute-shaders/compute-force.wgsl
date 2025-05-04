@@ -48,7 +48,6 @@ fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
       particles[global_id.x].net_force += common_term_visc * -1.0f / particles[i].density;
 
       // surface tension
-      // Surface tension
       var n: f32 = sim_params.mass * sim_params.k_poly_6 * pow((sim_params.kernel_r2 - r2), 2);
       var common_term_st: f32 = sim_params.surface_tension * (sim_params.mass / particles[global_id.x].density) * sim_params.k_lap_poly_6 * (sim_params.kernel_r2 - r2) * (3 * sim_params.kernel_r2 - r2) * n / abs(n);
       particles[global_id.x].net_force += normalized_dir * -common_term_st / particles[i].density; 

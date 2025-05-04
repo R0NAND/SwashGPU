@@ -1,12 +1,17 @@
 import * as THREE from "three";
-import pressureShader from "./compute-pressure.wgsl";
-import forcesShader from "./compute-forces.wgsl";
-import particleShader from "./compute-particles.wgsl";
+import { createMainBindGroup } from "./bind-groups/main-group";
+import { createForcePipeline } from "./pipelines/force-pipeline";
+import { createPressurePipeline } from "./pipelines/pressure-pipeline";
+import { createParticlePipeline } from "./pipelines/particle-pipeline";
+import "../style.css";
 
-const width = window.innerWidth;
-const height = window.innerHeight;
-
-const camera = new THREE.PerspectiveCamera(70, width / height, 0.01, 1000);
+const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
+const camera = new THREE.PerspectiveCamera(
+  70,
+  canvas.clientWidth / canvas.clientHeight,
+  0.01,
+  1000
+);
 
 camera.position.x = 50;
 camera.position.y = 200;
@@ -23,9 +28,18 @@ const n_y = 13;
 const n_z = 13;
 const n_particles = n_x * n_y * n_z;
 
+const positions = new Float32Array([n_particles * 3]);
+const velocities = new Float32Array([n_particles * 3]);
+const forces = new Float32Array([n_particles * 3]);
+const densities = new Float32Array([n_particles]);
+const pressures = new Float32Array([n_particles]);
+
 for (let x = 0; x < n_x; x++) {
   for (let y = 0; y < n_y; y++) {
     for (let z = 0; z < n_z; z++) {
+      positions[x * n_y * n_z + y * n_z + z] = x * spacing + 10;
+      positions[x * n_y * n_z + y * n_z + z + 1] = y * spacing + 50;
+      positions[x * n_y * n_z + y * n_z + z + 2] = z * spacing + 10;
       dummyPoints.push(
         //POSITION
         x * spacing + 10,
@@ -63,9 +77,8 @@ const material = new THREE.MeshNormalMaterial();
 
 const mesh = new THREE.InstancedMesh(geometry, material, n_particles);
 scene.add(mesh);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(width, height);
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
 let particleData = new Float32Array(dummyPoints);
 
@@ -82,9 +95,9 @@ const k_lap_poly_6 = 945.0 / (32.0 * Math.PI * Math.pow(kernel_r, 9));
 const k_spiky = 45.0 / (Math.PI * Math.pow(kernel_r, 6));
 const k_visc = 45.0 / (Math.PI * Math.pow(kernel_r, 6));
 
-const buffer = new ArrayBuffer(80); // or 256 to be safe
-const f32 = new Float32Array(buffer);
-const i32 = new Int32Array(buffer);
+const params = new ArrayBuffer(80); // or 256 to be safe
+const f32 = new Float32Array(params);
+const i32 = new Int32Array(params);
 f32[0] = 0.016666666666667; //dt
 f32[1] = kernel_r;
 f32[2] = kernel_r2;
@@ -117,8 +130,6 @@ const renderPoints = (points: Float32Array) => {
   renderer.render(scene, camera);
 };
 
-document.body.appendChild(renderer.domElement);
-
 renderPoints(particleData);
 
 if (!navigator.gpu) {
@@ -134,10 +145,41 @@ const device = await adapter.requestDevice();
 
 const simParamsBuffer = device.createBuffer({
   label: "Sim Params Uniform",
-  size: buffer.byteLength,
+  size: params.byteLength,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
-device.queue.writeBuffer(simParamsBuffer, 0, buffer);
+
+const positionBuffer = device.createBuffer({
+  size: positions.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+
+const velocityBuffer = device.createBuffer({
+  size: velocities.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+
+const forceBuffer = device.createBuffer({
+  size: forces.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+
+const densityBuffer = device.createBuffer({
+  size: densities.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+
+const pressureBuffer = device.createBuffer({
+  size: pressures.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+
+device.queue.writeBuffer(simParamsBuffer, 0, params);
+device.queue.writeBuffer(positionBuffer, 0, positions);
+device.queue.writeBuffer(velocityBuffer, 0, velocities);
+device.queue.writeBuffer(forceBuffer, 0, forces);
+device.queue.writeBuffer(densityBuffer, 0, densities);
+device.queue.writeBuffer(pressureBuffer, 0, pressures);
 
 const particleBuffer = device.createBuffer({
   label: "Particle Positions Storage",
@@ -154,64 +196,13 @@ const readbackBuffer = device.createBuffer({
   usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
 });
 
-const densityShaderModule = device.createShaderModule({
-  label: "Integrator Shader",
-  code: pressureShader,
-});
+const bindGroup = createMainBindGroup(device, simParamsBuffer, particleBuffer);
 
-const forceShaderModule = device.createShaderModule({
-  label: "Integrator Shader",
-  code: forcesShader,
-});
+const pressurePipeline = createPressurePipeline(device);
 
-const particleShaderModule = device.createShaderModule({
-  label: "Particle Shader",
-  code: particleShader,
-});
+const forcePipeline = createForcePipeline(device);
 
-const bindGroupLayout = device.createBindGroupLayout({
-  entries: [
-    {
-      binding: 0,
-      visibility: GPUShaderStage.COMPUTE,
-      buffer: { type: "uniform" },
-    },
-    {
-      binding: 1,
-      visibility: GPUShaderStage.COMPUTE,
-      buffer: { type: "storage" },
-    },
-  ],
-});
-
-const bindGroup = device.createBindGroup({
-  layout: bindGroupLayout,
-  entries: [
-    {
-      binding: 0,
-      resource: { buffer: simParamsBuffer },
-    },
-    {
-      binding: 1,
-      resource: { buffer: particleBuffer },
-    },
-  ],
-});
-
-const pressurePipeline = device.createComputePipeline({
-  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-  compute: { module: densityShaderModule, entryPoint: "computeMain" },
-});
-
-const forcePipeline = device.createComputePipeline({
-  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-  compute: { module: forceShaderModule, entryPoint: "computeMain" },
-});
-
-const wallPipeline = device.createComputePipeline({
-  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-  compute: { module: particleShaderModule, entryPoint: "computeMain" },
-});
+const particlePipeline = createParticlePipeline(device);
 
 const step = async () => {
   const encoder = device.createCommandEncoder();
@@ -224,7 +215,7 @@ const step = async () => {
   pass.setBindGroup(0, bindGroup);
   pass.dispatchWorkgroups(Math.round(n_particles / 256));
 
-  pass.setPipeline(wallPipeline);
+  pass.setPipeline(particlePipeline);
   pass.setBindGroup(0, bindGroup);
   pass.dispatchWorkgroups(Math.round(n_particles / 256));
   pass.end();
