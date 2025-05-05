@@ -1,6 +1,6 @@
 import { createCalcForceBindGroupLayout } from "../bind-group-layouts/calc-force-layout";
 
-export const createMainBindGroup = (
+export const createCalcForceBindGroup = (
   device: GPUDevice,
   params: GPUBuffer,
   position: GPUBuffer,

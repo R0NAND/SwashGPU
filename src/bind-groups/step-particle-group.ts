@@ -1,6 +1,6 @@
 import { createStepParticleBindGroupLayout } from "../bind-group-layouts/step-particle-layout";
 
-export const createMainBindGroup = (
+export const createStepParticleBindGroup = (
   device: GPUDevice,
   params: GPUBuffer,
   position: GPUBuffer,

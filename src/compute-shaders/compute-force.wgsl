@@ -1,12 +1,3 @@
-struct Particle {
-  position: vec3<f32>,   // 4 floats
-  velocity: vec3<f32>,   // 4 floats
-  net_force: vec3<f32>,  // 4 floats
-  color: vec3<f32>,    // 4 floats
-  density: f32, // 2 floats
-  pressure: f32
-};
-
 struct SimParams{
   dt: f32,
   kernel_r: f32,
@@ -26,31 +17,35 @@ struct SimParams{
 
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams;
-@group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
+@group(0) @binding(1) var<storage> positions: array<vec3f>;
+@group(0) @binding(2) var<storage> velocities: array<vec3f>;
+@group(0) @binding(3) var<storage> densities: array<f32>;
+@group(0) @binding(4) var<storage> pressures: array<f32>;
+@group(0) @binding(5) var<storage, read_write> forces: array<vec3f>;
 @compute @workgroup_size(256)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
   for(var i: u32 = 0; i < sim_params.n; i = i + 1){
-    var dx = particles[global_id.x].position - particles[i].position;
+    var dx = positions[global_id.x] - positions[i];
     var r2 = dot(dx, dx);
     if(r2 < sim_params.kernel_r2 && i != global_id.x){
       var r: f32 = sqrt(r2);
       var delta_r: f32 = sim_params.kernel_r - r;
 
       // pressure
-      var avg_press: f32 = (particles[global_id.x].pressure + particles[i].pressure) / 2.0f;
+      var avg_press: f32 = (pressures[global_id.x] + pressures[i]) / 2.0f;
       var common_term: f32 = sim_params.mass * avg_press * sim_params.k_spiky * pow(delta_r, 2);
       var normalized_dir: vec3<f32> = dx / r;
-      particles[global_id.x].net_force += (common_term / particles[i].density) * normalized_dir;
+      forces[global_id.x] += (common_term / densities[i]) * normalized_dir;
 
       // viscosity
-      var vel_ij: vec3<f32> = particles[global_id.x].velocity - particles[i].velocity;
+      var vel_ij: vec3<f32> = velocities[global_id.x] - velocities[i];
       var common_term_visc: vec3<f32> = vel_ij * sim_params.viscosity * sim_params.mass * sim_params.k_visc * delta_r; // TODO: THis is wrong!
-      particles[global_id.x].net_force += common_term_visc * -1.0f / particles[i].density;
+      forces[global_id.x] += common_term_visc * -1.0f /densities[i];
 
       // surface tension
       var n: f32 = sim_params.mass * sim_params.k_poly_6 * pow((sim_params.kernel_r2 - r2), 2);
-      var common_term_st: f32 = sim_params.surface_tension * (sim_params.mass / particles[global_id.x].density) * sim_params.k_lap_poly_6 * (sim_params.kernel_r2 - r2) * (3 * sim_params.kernel_r2 - r2) * n / abs(n);
-      particles[global_id.x].net_force += normalized_dir * -common_term_st / particles[i].density; 
+      var common_term_st: f32 = sim_params.surface_tension * (sim_params.mass / densities[global_id.x]) * sim_params.k_lap_poly_6 * (sim_params.kernel_r2 - r2) * (3 * sim_params.kernel_r2 - r2) * n / abs(n);
+      forces[global_id.x] += normalized_dir * -common_term_st / densities[i]; 
     }
   }
 }

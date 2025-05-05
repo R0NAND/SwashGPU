@@ -1,10 +1,10 @@
-import { createMainBindGroupLayout } from "../bind-group-layouts/main-layout";
+import { createStepParticleBindGroupLayout } from "../bind-group-layouts/step-particle-layout";
 import particleShader from "../compute-shaders/step-particle.wgsl";
 
 export const createParticlePipeline = (device: GPUDevice) => {
   return device.createComputePipeline({
     layout: device.createPipelineLayout({
-      bindGroupLayouts: [createMainBindGroupLayout(device)],
+      bindGroupLayouts: [createStepParticleBindGroupLayout(device)],
     }),
     compute: {
       module: device.createShaderModule({

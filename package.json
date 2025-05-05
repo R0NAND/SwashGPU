@@ -15,8 +15,7 @@
     "vite-plugin-string": "^1.2.3"
   },
   "dependencies": {
-    "@types/three": "^0.175.0",
     "@webgpu/types": "^0.1.60",
-    "three": "^0.175.0"
+    "gl-matrix": "^3.4.3"
   }
 }

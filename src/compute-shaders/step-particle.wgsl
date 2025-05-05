@@ -26,33 +26,37 @@ struct SimParams{
 
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams;
-@group(0) @binding(1) var<storage, read_write> particles: array<Particle>;
+@group(0) @binding(1) var<storage, read_write> positions: array<vec3f>;
+@group(0) @binding(2) var<storage, read_write> velocities: array<vec3f>;
+@group(0) @binding(3) var<storage, read_write> forces: array<vec3f>;
+@group(0) @binding(4) var<storage, read_write> densities: array<f32>;
+@group(0) @binding(5) var<storage, read_write> pressures: array<f32>;
   @compute @workgroup_size(256)
   fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    particles[global_id.x].velocity += sim_params.dt * particles[global_id.x].net_force / particles[global_id.x].density;
-    particles[global_id.x].velocity += sim_params.dt * sim_params.gravity;
-    particles[global_id.x].position += particles[global_id.x].velocity;
-    if particles[global_id.x].position.y < 0.0 {
-      particles[global_id.x].position.y = 0.0;
-      particles[global_id.x].velocity.y *= -0.95;
+    velocities[global_id.x] += sim_params.dt * sim_params.gravity;
+    velocities[global_id.x] += sim_params.dt * forces[global_id.x] / densities[global_id.x];
+    positions[global_id.x] += velocities[global_id.x];
+    if positions[global_id.x].y < 0.0 {
+      positions[global_id.x].y = 0.0;
+      velocities[global_id.x].y *= -0.95;
     }
-    if particles[global_id.x].position.x < 0.0 {
-      particles[global_id.x].position.x = 0.0;
-      particles[global_id.x].velocity.x *= -0.95;
+    if positions[global_id.x].x < 0.0 {
+      positions[global_id.x].x = 0.0;
+      velocities[global_id.x].x *= -0.95;
     }
-    if particles[global_id.x].position.x > 100.0 {
-      particles[global_id.x].position.x = 100.0;
-      particles[global_id.x].velocity.x *= -0.95;
+    if positions[global_id.x].x > 200.0 {
+      positions[global_id.x].x = 200.0;
+      velocities[global_id.x].x *= -0.95;
     }
-    if particles[global_id.x].position.z < 0.0 {
-      particles[global_id.x].position.z = 0.0;
-      particles[global_id.x].velocity.z *= -0.95;
+    if positions[global_id.x].z < 0.0 {
+      positions[global_id.x].z = 0.0;
+      velocities[global_id.x].z *= -0.95;
     }
-    if particles[global_id.x].position.z > 100.0 {
-      particles[global_id.x].position.z = 100.0;
-      particles[global_id.x].velocity.z *= -0.95;
+    if positions[global_id.x].z > 100.0 {
+      positions[global_id.x].z = 100.0;
+      velocities[global_id.x].z *= -0.95;
     }
-    particles[global_id.x].net_force = vec3(0.0, 0.0, 0.0);
-    particles[global_id.x].density = 0.0;
-    particles[global_id.x].pressure = 0.0;
+    forces[global_id.x] = vec3(0.0, 0.0, 0.0);
+    densities[global_id.x] = 0.0;
+    pressures[global_id.x] = 0.0;
   }

@@ -1,6 +1,6 @@
 import { createCalcPressureBindGroupLayout } from "../bind-group-layouts/calc-pressure-layout";
 
-export const createMainBindGroup = (
+export const createCalcPressureBindGroup = (
   device: GPUDevice,
   params: GPUBuffer,
   position: GPUBuffer,
