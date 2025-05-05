@@ -74,7 +74,7 @@ const projMatrix = mat4.create();
 const mvpMatrix = mat4.create();
 
 // Camera parameters
-const eye = vec3.fromValues(100, 150, 250);
+const eye = vec3.fromValues(100, 200, 250);
 const center = vec3.fromValues(100, 50, 50);
 const up = vec3.fromValues(0, 1, 0);
 
@@ -86,6 +86,10 @@ mat4.perspective(projMatrix, (70 * Math.PI) / 180, aspect, 0.01, 1000);
 
 mat4.multiply(mvpMatrix, projMatrix, viewMatrix);
 mat4.multiply(mvpMatrix, mvpMatrix, modelMatrix);
+
+const quadOffsets = new Float32Array([
+  -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1,
+]);
 
 const { device, context, canvasFormat } = await initGPU(canvas);
 
@@ -127,6 +131,11 @@ const mvpBuffer = device.createBuffer({
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
+const particleOffetsBuffer = device.createBuffer({
+  size: quadOffsets.byteLength,
+  usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+});
+
 device.queue.writeBuffer(simParamsBuffer, 0, params);
 device.queue.writeBuffer(velocityBuffer, 0, velocities);
 device.queue.writeBuffer(forceBuffer, 0, forces);
@@ -134,6 +143,7 @@ device.queue.writeBuffer(densityBuffer, 0, densities);
 device.queue.writeBuffer(pressureBuffer, 0, pressures);
 device.queue.writeBuffer(positionBuffer, 0, positions);
 device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix as Float32Array);
+device.queue.writeBuffer(particleOffetsBuffer, 0, quadOffsets);
 
 const calcPressureBindGroup = createCalcPressureBindGroup(
   device,
@@ -199,8 +209,9 @@ const step = async () => {
 
   renderPass.setPipeline(renderPipeline);
   renderPass.setBindGroup(0, renderBindGroup);
-  renderPass.setVertexBuffer(0, positionBuffer);
-  renderPass.draw(n_particles, 1, 0, 0);
+  renderPass.setVertexBuffer(0, particleOffetsBuffer); // 6 vertices
+  renderPass.setVertexBuffer(1, positionBuffer); // n_particles instances
+  renderPass.draw(6, n_particles);
   renderPass.end();
   device.queue.submit([encoder.finish()]);
   requestAnimationFrame(step);

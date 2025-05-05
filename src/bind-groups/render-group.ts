@@ -5,6 +5,7 @@ export const createRenderBindGroup = (device: GPUDevice, mvp: GPUBuffer) => {
     layout: createRenderBindGroupLayout(device),
     entries: [
       {
+        //position
         binding: 0,
         resource: { buffer: mvp },
       },

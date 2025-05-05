@@ -14,15 +14,26 @@ export const createRenderPipeline = (
       module: device.createShaderModule({
         code: vertexShader,
       }),
-      entryPoint: "main",
+      entryPoint: "vs_main",
       buffers: [
         {
-          arrayStride: 16, // vec4<f32> (aligned to 16 bytes)
+          arrayStride: 2 * 4, // vec2<f32> = 2 * 4 bytes
           attributes: [
             {
-              shaderLocation: 0,
+              shaderLocation: 0, // @location(0) for offset
               offset: 0,
-              format: "float32x3", // only using xyz
+              format: "float32x2",
+            },
+          ],
+        },
+        {
+          arrayStride: 4 * 4, // vec3<f32> = 3 * 4 bytes
+          stepMode: "instance", // This is important!
+          attributes: [
+            {
+              shaderLocation: 1, // @location(1) for center
+              offset: 0,
+              format: "float32x3",
             },
           ],
         },
@@ -32,7 +43,7 @@ export const createRenderPipeline = (
       module: device.createShaderModule({
         code: fragmentShader,
       }),
-      entryPoint: "main",
+      entryPoint: "fs_main",
       targets: [
         {
           format: format, // e.g. "bgra8unorm"
@@ -40,8 +51,7 @@ export const createRenderPipeline = (
       ],
     },
     primitive: {
-      topology: "point-list",
+      topology: "triangle-list",
     },
-    depthStencil: undefined,
   });
 };

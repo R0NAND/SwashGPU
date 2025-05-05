@@ -1,12 +1,3 @@
-struct Particle {
-  position: vec3<f32>,   // 4 floats
-  velocity: vec3<f32>,   // 4 floats
-  net_force: vec3<f32>,  // 4 floats
-  color: vec3<f32>,    // 4 floats
-  density: f32, // 2 floats
-  pressure: f32
-};
-
 struct SimParams{
   dt: f32,
   kernel_r: f32,
