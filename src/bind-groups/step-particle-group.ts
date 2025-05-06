@@ -3,6 +3,8 @@ import { createStepParticleBindGroupLayout } from "../bind-group-layouts/step-pa
 export const createStepParticleBindGroup = (
   device: GPUDevice,
   params: GPUBuffer,
+  rayOrigin: GPUBuffer,
+  rayDir: GPUBuffer,
   position: GPUBuffer,
   velocity: GPUBuffer,
   force: GPUBuffer,
@@ -18,22 +20,30 @@ export const createStepParticleBindGroup = (
       },
       {
         binding: 1,
-        resource: { buffer: position },
+        resource: { buffer: rayOrigin },
       },
       {
         binding: 2,
-        resource: { buffer: velocity },
+        resource: { buffer: rayDir },
       },
       {
         binding: 3,
-        resource: { buffer: force },
+        resource: { buffer: position },
       },
       {
         binding: 4,
-        resource: { buffer: density },
+        resource: { buffer: velocity },
       },
       {
         binding: 5,
+        resource: { buffer: force },
+      },
+      {
+        binding: 6,
+        resource: { buffer: density },
+      },
+      {
+        binding: 7,
         resource: { buffer: pressure },
       },
     ],

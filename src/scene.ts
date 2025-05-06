@@ -8,7 +8,7 @@ import { createCalcPressureBindGroup } from "./bind-groups/calc-pressure-group";
 import { createStepParticleBindGroup } from "./bind-groups/step-particle-group";
 import { createRenderBindGroup } from "./bind-groups/render-group";
 import { initGPU } from "./gpuContext";
-import { mat4, vec3 } from "gl-matrix";
+import { mat4, vec3, vec4 } from "gl-matrix";
 
 const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
 const spacing = 7.0;
@@ -68,13 +68,12 @@ f32[17] = -5; //gravity
 f32[18] = 0.0; //gravity
 
 // Create matrices
-const modelMatrix = mat4.create(); // identity for now
 const viewMatrix = mat4.create();
 const projMatrix = mat4.create();
 const mvpMatrix = mat4.create();
 
 // Camera parameters
-const eye = vec3.fromValues(100, 200, 250);
+const eye = vec3.fromValues(100, 150, 300);
 const center = vec3.fromValues(100, 50, 50);
 const up = vec3.fromValues(0, 1, 0);
 
@@ -85,7 +84,6 @@ const aspect = canvas.clientWidth / canvas.clientHeight;
 mat4.perspective(projMatrix, (70 * Math.PI) / 180, aspect, 0.01, 1000);
 
 mat4.multiply(mvpMatrix, projMatrix, viewMatrix);
-mat4.multiply(mvpMatrix, mvpMatrix, modelMatrix);
 
 const quadOffsets = new Float32Array([
   -1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1,
@@ -101,32 +99,36 @@ const simParamsBuffer = device.createBuffer({
 
 const velocityBuffer = device.createBuffer({
   size: velocities.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
 });
 
 const forceBuffer = device.createBuffer({
   size: forces.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage: GPUBufferUsage.STORAGE,
 });
 
 const densityBuffer = device.createBuffer({
   size: densities.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage: GPUBufferUsage.STORAGE,
 });
 
 const pressureBuffer = device.createBuffer({
   size: pressures.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage: GPUBufferUsage.STORAGE,
 });
 
 const positionBuffer = device.createBuffer({
-  label: "Particle Positions Storage",
   size: positions.byteLength,
   usage:
     GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 });
 
-const mvpBuffer = device.createBuffer({
+const projectionBuffer = device.createBuffer({
+  size: 64, // 4x4 floats = 64 bytes
+  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+
+const viewBuffer = device.createBuffer({
   size: 64, // 4x4 floats = 64 bytes
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
@@ -136,13 +138,20 @@ const particleOffetsBuffer = device.createBuffer({
   usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 });
 
+const rayOriginBuffer = device.createBuffer({
+  size: 12,
+  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+
+const rayDirBuffer = device.createBuffer({
+  size: 12,
+  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+
 device.queue.writeBuffer(simParamsBuffer, 0, params);
-device.queue.writeBuffer(velocityBuffer, 0, velocities);
-device.queue.writeBuffer(forceBuffer, 0, forces);
-device.queue.writeBuffer(densityBuffer, 0, densities);
-device.queue.writeBuffer(pressureBuffer, 0, pressures);
 device.queue.writeBuffer(positionBuffer, 0, positions);
-device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix as Float32Array);
+device.queue.writeBuffer(projectionBuffer, 0, projMatrix as Float32Array);
+device.queue.writeBuffer(viewBuffer, 0, viewMatrix as Float32Array);
 device.queue.writeBuffer(particleOffetsBuffer, 0, quadOffsets);
 
 const calcPressureBindGroup = createCalcPressureBindGroup(
@@ -164,18 +173,30 @@ const calcForceBindGroup = createCalcForceBindGroup(
 const stepParticleBindGroup = createStepParticleBindGroup(
   device,
   simParamsBuffer,
+  rayOriginBuffer,
+  rayDirBuffer,
   positionBuffer,
   velocityBuffer,
   forceBuffer,
   densityBuffer,
   pressureBuffer
 );
-const renderBindGroup = createRenderBindGroup(device, mvpBuffer);
+const renderBindGroup = createRenderBindGroup(
+  device,
+  viewBuffer,
+  projectionBuffer
+);
 
 const pressurePipeline = createPressurePipeline(device);
 const forcePipeline = createForcePipeline(device);
 const particlePipeline = createParticlePipeline(device);
 const renderPipeline = createRenderPipeline(device, canvasFormat);
+
+const depthTexture = device.createTexture({
+  size: [canvas.width, canvas.height],
+  format: "depth24plus",
+  usage: GPUTextureUsage.RENDER_ATTACHMENT,
+});
 
 const executeComputePass = (
   encoder: GPUCommandEncoder,
@@ -190,7 +211,44 @@ const executeComputePass = (
   pass.end();
 };
 
+let mouseX = -1;
+let mouseY = -1;
+canvas.style.touchAction = "none";
+
+const pointerMoveEvent = (e: PointerEvent) => {
+  mouseX = e.offsetX;
+  mouseY = e.offsetY;
+};
+
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId); // Captures pointer during drag
+  canvas.addEventListener("pointermove", pointerMoveEvent);
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  canvas.releasePointerCapture(e.pointerId);
+  canvas.removeEventListener("pointermove", pointerMoveEvent);
+  mouseX = -1;
+  mouseY = -1;
+});
+
 const step = async () => {
+  const x = (mouseX / canvas.clientWidth) * 2 - 1;
+  const y = -(mouseY / canvas.clientHeight) * 2 + 1;
+  const invViewProj = mat4.invert(mat4.create(), mvpMatrix);
+  const pNear = vec4.transformMat4(vec4.create(), [x, y, -1, 1], invViewProj);
+  const pFar = vec4.transformMat4(vec4.create(), [x, y, 1, 1], invViewProj);
+  vec4.scale(pNear, pNear, 1 / pNear[3]);
+  vec4.scale(pFar, pFar, 1 / pFar[3]);
+  const rayOrigin = [pNear[0], pNear[1], pNear[2]] as vec3;
+  const rayDir = vec3.normalize(
+    vec3.create(),
+    vec3.sub(vec3.create(), [pFar[0], pFar[1], pFar[2]], rayOrigin)
+  );
+
+  device.queue.writeBuffer(rayOriginBuffer, 0, new Float32Array(rayOrigin));
+  device.queue.writeBuffer(rayDirBuffer, 0, new Float32Array(rayDir));
+
   const encoder = device.createCommandEncoder();
   executeComputePass(encoder, pressurePipeline, calcPressureBindGroup, 256);
   executeComputePass(encoder, forcePipeline, calcForceBindGroup, 256);
@@ -205,12 +263,19 @@ const step = async () => {
         storeOp: "store",
       },
     ],
+    depthStencilAttachment: {
+      view: depthTexture.createView(),
+      depthLoadOp: "clear",
+      depthClearValue: 1.0,
+      depthStoreOp: "store",
+    },
   });
 
   renderPass.setPipeline(renderPipeline);
   renderPass.setBindGroup(0, renderBindGroup);
   renderPass.setVertexBuffer(0, particleOffetsBuffer); // 6 vertices
   renderPass.setVertexBuffer(1, positionBuffer); // n_particles instances
+  renderPass.setVertexBuffer(2, velocityBuffer);
   renderPass.draw(6, n_particles);
   renderPass.end();
   device.queue.submit([encoder.finish()]);

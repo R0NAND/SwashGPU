@@ -17,13 +17,23 @@ struct SimParams{
 
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams;
-@group(0) @binding(1) var<storage, read_write> positions: array<vec3f>;
-@group(0) @binding(2) var<storage, read_write> velocities: array<vec3f>;
-@group(0) @binding(3) var<storage, read_write> forces: array<vec3f>;
-@group(0) @binding(4) var<storage, read_write> densities: array<f32>;
-@group(0) @binding(5) var<storage, read_write> pressures: array<f32>;
+@group(0) @binding(1) var<uniform> ray_origin: vec3f;
+@group(0) @binding(2) var<uniform> ray_dir: vec3f;
+@group(0) @binding(3) var<storage, read_write> positions: array<vec3f>;
+@group(0) @binding(4) var<storage, read_write> velocities: array<vec3f>;
+@group(0) @binding(5) var<storage, read_write> forces: array<vec3f>;
+@group(0) @binding(6) var<storage, read_write> densities: array<f32>;
+@group(0) @binding(7) var<storage, read_write> pressures: array<f32>;
   @compute @workgroup_size(256)
   fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let diff = positions[global_id.x] - ray_origin;
+    let t = dot(diff, ray_dir);
+    let closest = ray_origin + t * ray_dir;
+    let distance = length(positions[global_id.x] - closest);
+
+    if (distance < 20) { //TODO: Add this to sim params
+      velocities[global_id.x] += sim_params.dt * vec3f(0.0f, 20.0f, 0.0f);
+    }
     velocities[global_id.x] += sim_params.dt * sim_params.gravity;
     velocities[global_id.x] += sim_params.dt * forces[global_id.x] / densities[global_id.x];
     positions[global_id.x] += velocities[global_id.x];

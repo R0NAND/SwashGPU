@@ -17,21 +17,34 @@ export const createRenderPipeline = (
       entryPoint: "vs_main",
       buffers: [
         {
-          arrayStride: 2 * 4, // vec2<f32> = 2 * 4 bytes
+          arrayStride: 8,
           attributes: [
             {
-              shaderLocation: 0, // @location(0) for offset
+              shaderLocation: 0,
               offset: 0,
               format: "float32x2",
             },
           ],
         },
         {
-          arrayStride: 4 * 4, // vec3<f32> = 3 * 4 bytes
-          stepMode: "instance", // This is important!
+          //position
+          arrayStride: 16,
+          stepMode: "instance",
           attributes: [
             {
-              shaderLocation: 1, // @location(1) for center
+              shaderLocation: 1,
+              offset: 0,
+              format: "float32x3",
+            },
+          ],
+        },
+        {
+          //velocity
+          arrayStride: 16,
+          stepMode: "instance",
+          attributes: [
+            {
+              shaderLocation: 2,
               offset: 0,
               format: "float32x3",
             },
@@ -52,6 +65,11 @@ export const createRenderPipeline = (
     },
     primitive: {
       topology: "triangle-list",
+    },
+    depthStencil: {
+      format: "depth24plus",
+      depthWriteEnabled: true,
+      depthCompare: "less", // nearer fragments win
     },
   });
 };
