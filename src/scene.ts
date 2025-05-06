@@ -13,9 +13,9 @@ import { mat4, vec3, vec4 } from "gl-matrix";
 const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
 const spacing = 7.0;
 
-const n_x = 10;
-const n_y = 100;
-const n_z = 10;
+const n_x = 32;
+const n_y = 15;
+const n_z = 12;
 const n_particles = n_x * n_y * n_z;
 
 const positions = new Float32Array(n_particles * 4);
@@ -28,19 +28,19 @@ for (let x = 0; x < n_x; x++) {
   for (let y = 0; y < n_y; y++) {
     for (let z = 0; z < n_z; z++) {
       positions[4 * (x * n_y * n_z + y * n_z + z)] = x * spacing + 1;
-      positions[4 * (x * n_y * n_z + y * n_z + z) + 1] = y * spacing + 10;
+      positions[4 * (x * n_y * n_z + y * n_z + z) + 1] = y * spacing + 1;
       positions[4 * (x * n_y * n_z + y * n_z + z) + 2] = z * spacing + 1;
     }
   }
 }
 //const mvpArray = new Float32Array(mvpMatrix.elements);
-const kernel_r = 30;
+const kernel_r = 20;
 const kernel_r2 = kernel_r * kernel_r;
 const mass = 1.0;
 const viscosity = 0.5;
 const stiffness = 1000;
-const restDensity = 0.0001;
-const surfaceTension = 0.005;
+const restDensity = 0.001;
+const surfaceTension = 0.001;
 
 const k_poly_6 = 315.0 / (64.0 * Math.PI * Math.pow(kernel_r, 9));
 const k_lap_poly_6 = 945.0 / (32.0 * Math.PI * Math.pow(kernel_r, 9));
@@ -73,8 +73,8 @@ const projMatrix = mat4.create();
 const mvpMatrix = mat4.create();
 
 // Camera parameters
-const eye = vec3.fromValues(100, 150, 300);
-const center = vec3.fromValues(100, 50, 50);
+const eye = vec3.fromValues(125, 200, 300);
+const center = vec3.fromValues(150, 50, 50);
 const up = vec3.fromValues(0, 1, 0);
 
 // Build view matrix

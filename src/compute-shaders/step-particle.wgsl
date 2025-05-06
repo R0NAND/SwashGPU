@@ -34,28 +34,29 @@ struct SimParams{
     if (distance < 20) { //TODO: Add this to sim params
       velocities[global_id.x] += sim_params.dt * vec3f(0.0f, 20.0f, 0.0f);
     }
-
-    let wall_stiffness = 0.001;
-    if positions[global_id.x].y < 0.0 {
-      forces[global_id.x].y += wall_stiffness * -positions[global_id.x].y;
-    }
-    if positions[global_id.x].x < 0.0 {
-      forces[global_id.x].x += wall_stiffness * -positions[global_id.x].x;
-    }
-    if positions[global_id.x].x > 200.0 {
-      forces[global_id.x].x += wall_stiffness * (200.0 - positions[global_id.x].x);
-    }
-    if positions[global_id.x].z < 0.0 {
-      forces[global_id.x].z += wall_stiffness * -positions[global_id.x].z;
-    }
-    if positions[global_id.x].z > 100.0 {
-      forces[global_id.x].z += wall_stiffness * (100.0 - positions[global_id.x].z);
-    }
-
-
     velocities[global_id.x] += sim_params.dt * sim_params.gravity;
     velocities[global_id.x] += sim_params.dt * forces[global_id.x] / densities[global_id.x];
     positions[global_id.x] += velocities[global_id.x];
+    if positions[global_id.x].y < 0.0 {
+      positions[global_id.x].y = 0.0;
+      velocities[global_id.x].y *= -0.95;
+    }
+    if positions[global_id.x].x < 0.0 {
+      positions[global_id.x].x = 0.0;
+      velocities[global_id.x].x *= -0.95;
+    }
+    if positions[global_id.x].x > 300.0 {
+      positions[global_id.x].x = 300.0;
+      velocities[global_id.x].x *= -0.95;
+    }
+    if positions[global_id.x].z < 0.0 {
+      positions[global_id.x].z = 0.0;
+      velocities[global_id.x].z *= -0.95;
+    }
+    if positions[global_id.x].z > 100.0 {
+      positions[global_id.x].z = 100.0;
+      velocities[global_id.x].z *= -0.95;
+    }
     forces[global_id.x] = vec3(0.0, 0.0, 0.0);
     densities[global_id.x] = 0.0;
     pressures[global_id.x] = 0.0;

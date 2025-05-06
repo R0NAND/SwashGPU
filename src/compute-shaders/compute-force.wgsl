@@ -27,7 +27,7 @@ fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
   for(var i: u32 = 0; i < sim_params.n; i = i + 1){
     var dx = positions[global_id.x] - positions[i];
     var r2 = dot(dx, dx);
-    if(r2 < sim_params.kernel_r2 && i != global_id.x){
+    if(r2 < sim_params.kernel_r2 && i != global_id.x && r2 != 0){
       var r: f32 = sqrt(r2);
       var delta_r: f32 = sim_params.kernel_r - r;
 
@@ -35,6 +35,9 @@ fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
       var avg_press: f32 = (pressures[global_id.x] + pressures[i]) / 2.0f;
       var common_term: f32 = sim_params.mass * avg_press * sim_params.k_spiky * pow(delta_r, 2);
       var normalized_dir: vec3<f32> = dx / r;
+      if(r == 0){
+        normalized_dir = vec3f(sin(f32(global_id.x)) * cos(f32(global_id.x)), cos(f32(global_id.x)), cos(f32(global_id.x)) * sin(f32(global_id.x)));//TODO: get better way
+      }
       forces[global_id.x] += (common_term / densities[i]) * normalized_dir;
 
       // viscosity
