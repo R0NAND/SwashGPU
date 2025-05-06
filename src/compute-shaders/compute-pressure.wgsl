@@ -18,12 +18,14 @@ struct SimParams{
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams;
 @group(0) @binding(1) var<storage> positions: array<vec3f>;
-@group(0) @binding(2) var<storage, read_write> densities: array<f32>;
-@group(0) @binding(3) var<storage, read_write> pressures: array<f32>;
+@group(0) @binding(2) var<storage> velocities: array<vec3f>;
+@group(0) @binding(3) var<storage, read_write> densities: array<f32>;
+@group(0) @binding(4) var<storage, read_write> pressures: array<f32>;
 @compute @workgroup_size(256)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  let predicted_pos = positions[global_id.x] + velocities[global_id.x] * sim_params.dt; // improves simulation stability
   for(var i = 0; i < sim_params.n; i = i + 1){
-    var dx: vec3<f32> = positions[global_id.x] - positions[i];
+    var dx: vec3<f32> = predicted_pos - positions[i];
     var r2: f32 = dot(dx, dx);
     if(r2 < sim_params.kernel_r2){
       var dist: f32 = sqrt(r2);

@@ -14,14 +14,20 @@ export const createCalcPressureBindGroupLayout = (device: GPUDevice) => {
         buffer: { type: "read-only-storage" },
       },
       {
-        //densities
+        //velocities
         binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: "read-only-storage" },
+      },
+      {
+        //densities
+        binding: 3,
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: "storage" },
       },
       {
         //pressure
-        binding: 3,
+        binding: 4,
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: "storage" },
       },

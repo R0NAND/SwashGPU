@@ -14,7 +14,7 @@ const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
 const spacing = 7.0;
 
 const n_x = 10;
-const n_y = 50;
+const n_y = 100;
 const n_z = 10;
 const n_particles = n_x * n_y * n_z;
 
@@ -158,6 +158,7 @@ const calcPressureBindGroup = createCalcPressureBindGroup(
   device,
   simParamsBuffer,
   positionBuffer,
+  velocityBuffer,
   densityBuffer,
   pressureBuffer
 );
