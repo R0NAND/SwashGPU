@@ -11,6 +11,8 @@ import { initGPU } from "./gpuContext";
 import { mat4, vec3, vec4 } from "gl-matrix";
 
 const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
+canvas.height = canvas.clientHeight;
+canvas.width = canvas.clientHeight;
 const spacing = 7.0;
 
 const n_x = 32;
