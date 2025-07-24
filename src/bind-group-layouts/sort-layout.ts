@@ -1,23 +1,23 @@
-export const createSortBuffersBindGroupLayout = (device: GPUDevice) => {
+export const createSortBindGroupLayout = (device: GPUDevice) => {
   return device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
         visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: "storage" },
+        buffer: { type: "read-only-storage" },
       },
       {
         binding: 1,
         visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: "storage" },
+        buffer: { type: "read-only-storage" },
       },
       {
-        binding: 0,
+        binding: 2,
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: "storage" },
       },
       {
-        binding: 1,
+        binding: 3,
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: "storage" },
       },

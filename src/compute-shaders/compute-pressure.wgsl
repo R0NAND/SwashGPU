@@ -13,6 +13,7 @@ struct SimParams{
   k_visc: f32,
   n: i32,
   gravity: vec3<f32>,
+  sim_cells: vec3<u32>,
 };
 
 

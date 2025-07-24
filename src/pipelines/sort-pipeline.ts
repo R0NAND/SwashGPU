@@ -1,5 +1,5 @@
 import { createSortStridesBindGroupLayout } from "../bind-group-layouts/sort-strides-layout";
-import { createSortBuffersBindGroupLayout } from "../bind-group-layouts/sort-buffers-layout";
+import { createSortBindGroupLayout } from "../bind-group-layouts/sort-layout";
 import sortShader from "../compute-shaders/sort.wgsl";
 
 export const createSortPipeline = (device: GPUDevice) => {
@@ -7,7 +7,7 @@ export const createSortPipeline = (device: GPUDevice) => {
     layout: device.createPipelineLayout({
       bindGroupLayouts: [
         createSortStridesBindGroupLayout(device),
-        createSortBuffersBindGroupLayout(device),
+        createSortBindGroupLayout(device),
       ],
     }),
     compute: {

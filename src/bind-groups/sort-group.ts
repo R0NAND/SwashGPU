@@ -1,6 +1,6 @@
-import { createSortBuffersBindGroupLayout } from "../bind-group-layouts/sort-buffers-layout";
+import { createSortBindGroupLayout } from "../bind-group-layouts/sort-layout";
 
-export const createSortBuffersBindGroup = (
+export const createSortBindGroup = (
   device: GPUDevice,
   keysRead: GPUBuffer,
   keysWrite: GPUBuffer,
@@ -8,7 +8,7 @@ export const createSortBuffersBindGroup = (
   valuesWrite: GPUBuffer
 ) => {
   return device.createBindGroup({
-    layout: createSortBuffersBindGroupLayout(device),
+    layout: createSortBindGroupLayout(device),
     entries: [
       {
         binding: 0,
