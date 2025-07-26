@@ -1,19 +1,11 @@
 import "../style.css";
-import { createForcePipeline } from "./pipelines/force-pipeline";
-import { createPressurePipeline } from "./pipelines/pressure-pipeline";
-import { createParticlePipeline } from "./pipelines/particle-pipeline";
+import assignCellShader from "./compute-shaders/assign-cell.wgsl";
+import sortShader from "./compute-shaders/sort.wgsl";
+import indexCellShader from "./compute-shaders/index-cell.wgsl";
+import computePressureShader from "./compute-shaders/compute-pressure.wgsl";
+import computeForceShader from "./compute-shaders/compute-force.wgsl";
+import stepParticleShader from "./compute-shaders/step-particle.wgsl";
 import { createRenderPipeline } from "./pipelines/render-pipeline";
-import { createAssignCellPipeline } from "./pipelines/assign-cell-pipeline";
-import { createIndexCellPipeline } from "./pipelines/index-cell-pipeline";
-import { createSortStridesBindGroup } from "./bind-groups/sort-strides-group";
-import { createSortPipeline } from "./pipelines/sort-pipeline";
-import { createCalcForceBindGroup } from "./bind-groups/calc-force-group";
-import { createCalcPressureBindGroup } from "./bind-groups/calc-pressure-group";
-import { createStepParticleBindGroup } from "./bind-groups/step-particle-group";
-import { createAssignCellBindGroup } from "./bind-groups/assign-cell-group";
-import { createIndexCellBindGroup } from "./bind-groups/index-cell-group";
-import { createSortBindGroup } from "./bind-groups/sort-group";
-import { createRenderBindGroup } from "./bind-groups/render-group";
 import { initGPU } from "./gpuContext";
 import { mat4, vec3, vec4 } from "gl-matrix";
 
@@ -22,9 +14,9 @@ canvas.height = canvas.clientHeight;
 canvas.width = canvas.clientHeight;
 const spacing = 7.0;
 
-const n_x = 32;
-const n_y = 15;
-const n_z = 12;
+const n_x = 5; //32;
+const n_y = 5; //15;
+const n_z = 5; //12;
 const n_particles = n_x * n_y * n_z;
 
 const n_sorting = Math.pow(2, Math.ceil(Math.log2(n_particles)));
@@ -116,110 +108,131 @@ const simParamsBuffer = device.createBuffer({
 });
 
 const velocityBuffer = device.createBuffer({
+  label: "particle velocity buffer",
   size: velocities.byteLength,
   usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
 });
 
 const forceBuffer = device.createBuffer({
+  label: "particle force buffer",
   size: forces.byteLength,
   usage: GPUBufferUsage.STORAGE,
 });
 
 const densityBuffer = device.createBuffer({
+  label: "particle density buffer",
   size: densities.byteLength,
   usage: GPUBufferUsage.STORAGE,
 });
 
 const pressureBuffer = device.createBuffer({
+  label: "particle pressure buffer",
   size: pressures.byteLength,
   usage: GPUBufferUsage.STORAGE,
 });
 
 const positionBuffer = device.createBuffer({
+  label: "particle position buffer",
   size: positions.byteLength,
   usage:
     GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 });
 
+let bufferState = 0;
+const toggleBufferState = () => {
+  bufferState = bufferState === 0 ? 1 : 0;
+};
 const indices_fill_array = new Uint32Array(n_sorting).fill(0xfffffff);
 const indexBuffers = [
   device.createBuffer({
-    label: "index read buffer",
-    size: n_sorting * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, // TODO: Remove COPY_SRC
-  }),
-  device.createBuffer({
-    label: "index write buffer",
+    label: "index buffer 0",
     size: n_sorting * 4,
     usage:
       GPUBufferUsage.STORAGE |
-      GPUBufferUsage.COPY_DST |
-      GPUBufferUsage.COPY_SRC, //TODO: Remove COPY_SRC
+      GPUBufferUsage.COPY_SRC |
+      GPUBufferUsage.COPY_DST, // TODO: Remove COPY_SRC
+  }),
+  device.createBuffer({
+    label: "index buffer 1",
+    size: n_sorting * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, //TODO: Remove COPY_SRC
   }),
 ];
 const cellBuffers = [
   device.createBuffer({
-    label: "cell read buffer",
-    size: n_sorting * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, // TODO: Remove COPY_SRC
-  }),
-  device.createBuffer({
-    label: "cell write buffer",
+    label: "cell buffer 0",
     size: n_sorting * 4,
     usage:
       GPUBufferUsage.STORAGE |
-      GPUBufferUsage.COPY_DST |
-      GPUBufferUsage.COPY_SRC, //TODO: Remove COPY_SRC
+      GPUBufferUsage.COPY_SRC |
+      GPUBufferUsage.COPY_DST, // TODO: Remove COPY_SRC
+  }),
+  device.createBuffer({
+    label: "cell buffer 1",
+    size: n_sorting * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, //TODO: Remove COPY_SRC
   }),
 ];
 
 const counterpartStrideBuffer = device.createBuffer({
+  label: "bitonic sort counterpart stride",
   size: 4,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
 const directionStrideBuffer = device.createBuffer({
+  label: "bitonic sort direction stride",
   size: 4,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
 const cellClearArray = new Uint32Array(n_cells).fill(0xfffffff);
 const staticCellClearBuffer = device.createBuffer({
+  label: "static cell clear buffer",
   size: n_cells * 4,
   usage:
     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
 });
 const cellStartBuffer = device.createBuffer({
+  label: "cell start index buffer",
   size: n_cells * 4,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage:
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
 });
 
 const cellEndBuffer = device.createBuffer({
+  label: "cell end index buffer",
   size: n_cells * 4,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  usage:
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
 });
 
 const projectionBuffer = device.createBuffer({
+  label: "Projection Matrix Uniform",
   size: 64, // 4x4 floats = 64 bytes
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
 const viewBuffer = device.createBuffer({
+  label: "View Matrix Uniform",
   size: 64, // 4x4 floats = 64 bytes
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
 const particleOffetsBuffer = device.createBuffer({
+  label: "Particle Offsets Buffer",
   size: quadOffsets.byteLength,
   usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 });
 
 const rayOriginBuffer = device.createBuffer({
+  label: "Ray Origin Buffer",
   size: 12,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
 const rayDirBuffer = device.createBuffer({
+  label: "Ray Direction Buffer",
   size: 12,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
@@ -229,75 +242,127 @@ device.queue.writeBuffer(positionBuffer, 0, positions);
 device.queue.writeBuffer(projectionBuffer, 0, projMatrix as Float32Array);
 device.queue.writeBuffer(viewBuffer, 0, viewMatrix as Float32Array);
 device.queue.writeBuffer(particleOffetsBuffer, 0, quadOffsets);
-device.queue.writeBuffer(cellBuffers[1], 0, indices_fill_array);
-device.queue.writeBuffer(indexBuffers[1], 0, indices_fill_array);
+device.queue.writeBuffer(cellBuffers[0], 0, indices_fill_array);
 device.queue.writeBuffer(staticCellClearBuffer, 0, cellClearArray);
+
 type BufferBindingType = "uniform" | "storage" | "read-only-storage";
 
-interface BindGroupResult {
-  layout: GPUBindGroupLayout;
-  bindGroup: GPUBindGroup;
+function createSharedBindGroupLayout(
+  device: GPUDevice,
+  types: BufferBindingType[],
+  visibility: number
+): GPUBindGroupLayout {
+  return device.createBindGroupLayout({
+    entries: types.map((type, i) => ({
+      binding: i,
+      visibility,
+      buffer: { type: type as GPUBufferBindingType },
+    })),
+  });
 }
 
-function createBindGroupFromBuffers(
+export function createBindGroupFromBuffers(
   device: GPUDevice,
   buffers: GPUBuffer[],
   types: BufferBindingType[],
-  visibility: number = GPUShaderStage.COMPUTE |
-    GPUShaderStage.VERTEX |
-    GPUShaderStage.FRAGMENT
-): BindGroupResult {
+  visibility: number = GPUShaderStage.COMPUTE
+): { layout: GPUBindGroupLayout; bindGroup: GPUBindGroup } {
   if (buffers.length !== types.length) {
-    throw new Error("buffers and types arrays must be the same length.");
+    throw new Error("buffers and types must be the same length");
   }
 
-  const entries: GPUBindGroupLayoutEntry[] = buffers.map((_, i) => ({
-    binding: i,
-    visibility,
-    buffer: { type: types[i] as GPUBufferBindingType },
-  }));
-
-  const layout = device.createBindGroupLayout({ entries });
-
-  const bindGroupEntries: GPUBindGroupEntry[] = buffers.map((buffer, i) => ({
-    binding: i,
-    resource: { buffer },
-  }));
+  const layout = createSharedBindGroupLayout(device, types, visibility);
 
   const bindGroup = device.createBindGroup({
     layout,
-    entries: bindGroupEntries,
+    entries: buffers.map((buffer, i) => ({
+      binding: i,
+      resource: { buffer },
+    })),
   });
 
   return { layout, bindGroup };
 }
 
+export function createBindGroupsFromBufferSets(
+  device: GPUDevice,
+  bufferSets: GPUBuffer[][],
+  types: BufferBindingType[],
+  visibility: number = GPUShaderStage.COMPUTE
+): { layout: GPUBindGroupLayout; bindGroups: GPUBindGroup[] } {
+  for (const buffers of bufferSets) {
+    if (buffers.length !== types.length) {
+      throw new Error(
+        "Each buffer set must match the length of the binding types array."
+      );
+    }
+  }
+
+  const layout = createSharedBindGroupLayout(device, types, visibility);
+
+  const bindGroups = bufferSets.map((buffers) =>
+    device.createBindGroup({
+      layout,
+      entries: buffers.map((buffer, i) => ({
+        binding: i,
+        resource: { buffer },
+      })),
+    })
+  );
+
+  return { layout, bindGroups };
+}
+
 const { bindGroup: assignCellBindGroup, layout: assignCellLayout } =
   createBindGroupFromBuffers(
     device,
-    [simParamsBuffer, positionBuffer, indexWriteBuffer, cellWriteBuffer],
-    ["uniform", "read-only-storage", "storage", "storage"]
+    [simParamsBuffer, positionBuffer],
+    ["uniform", "read-only-storage"],
+    GPUShaderStage.COMPUTE
   );
 
-const { bindGroup: indexCellBindGroup, layout: indexCellLayout } =
-  createBindGroupFromBuffers(
+const { bindGroups: assignCellWriteBindGroups, layout: assignCellWriteLayout } =
+  createBindGroupsFromBufferSets(
     device,
-    [simParamsBuffer, cellReadBuffer, cellStartBuffer, cellEndBuffer],
-    ["uniform", "read-only-storage", "storage", "storage"]
+    [
+      [indexBuffers[0], cellBuffers[0]],
+      [indexBuffers[1], cellBuffers[1]],
+    ],
+    ["storage", "storage"],
+    GPUShaderStage.COMPUTE
   );
 
 const { bindGroup: sortStridesBindGroup, layout: sortStridesLayout } =
   createBindGroupFromBuffers(
     device,
-    [directionStrideBuffer, counterpartStrideBuffer],
-    ["storage", "read-only-storage"]
+    [simParamsBuffer, counterpartStrideBuffer, directionStrideBuffer],
+    ["uniform", "uniform", "uniform"],
+    GPUShaderStage.COMPUTE
+  );
+const { bindGroups: sortBuffersBindGroups, layout: sortBuffersLayout } =
+  createBindGroupsFromBufferSets(
+    device,
+    [
+      [cellBuffers[0], indexBuffers[0], cellBuffers[1], indexBuffers[1]],
+      [cellBuffers[1], indexBuffers[1], cellBuffers[0], indexBuffers[0]],
+    ],
+    ["read-only-storage", "read-only-storage", "storage", "storage"],
+    GPUShaderStage.COMPUTE
   );
 
-const { bindGroup: sortBindGroup, layout: sortLayout } =
+const { bindGroup: indexCellBindGroup, layout: indexCellLayout } =
   createBindGroupFromBuffers(
     device,
-    [cellReadBuffer, indexReadBuffer, cellWriteBuffer, indexWriteBuffer],
-    ["read-only-storage", "read-only-storage", "storage", "storage"]
+    [simParamsBuffer, cellStartBuffer, cellEndBuffer],
+    ["uniform", "storage", "storage"],
+    GPUShaderStage.COMPUTE
+  );
+const { bindGroups: indexCellWriteBindGroups, layout: indexCellWriteLayout } =
+  createBindGroupsFromBufferSets(
+    device,
+    [[cellBuffers[0]], [cellBuffers[1]]],
+    ["read-only-storage"],
+    GPUShaderStage.COMPUTE
   );
 
 const { bindGroup: calcPressureBindGroup, layout: calcPressureLayout } =
@@ -310,7 +375,8 @@ const { bindGroup: calcPressureBindGroup, layout: calcPressureLayout } =
       densityBuffer,
       pressureBuffer,
     ],
-    ["uniform", "read-only-storage", "read-only-storage", "storage", "storage"]
+    ["uniform", "read-only-storage", "read-only-storage", "storage", "storage"],
+    GPUShaderStage.COMPUTE
   );
 
 const { bindGroup: calcForceBindGroup, layout: calcForceLayout } =
@@ -331,7 +397,8 @@ const { bindGroup: calcForceBindGroup, layout: calcForceLayout } =
       "read-only-storage",
       "read-only-storage",
       "storage",
-    ]
+    ],
+    GPUShaderStage.COMPUTE
   );
 
 const { bindGroup: stepParticleBindGroup, layout: stepParticleLayout } =
@@ -349,30 +416,91 @@ const { bindGroup: stepParticleBindGroup, layout: stepParticleLayout } =
     ],
     [
       "uniform",
-      "read-only-storage",
-      "read-only-storage",
+      "uniform",
+      "uniform",
       "storage",
       "storage",
-      "read-only-storage",
-      "read-only-storage",
-      "read-only-storage",
-    ]
+      "storage",
+      "storage",
+      "storage",
+    ],
+    GPUShaderStage.COMPUTE
   );
 
 const { bindGroup: renderBindGroup, layout: renderLayout } =
   createBindGroupFromBuffers(
     device,
     [viewBuffer, projectionBuffer],
-    ["uniform", "uniform"]
+    ["uniform", "uniform"],
+    GPUShaderStage.VERTEX
   );
 
-const assignCellPipeline = createAssignCellPipeline(device);
-const indexCellPipeline = createIndexCellPipeline(device);
-const sortPipeline = createSortPipeline(device);
-const pressurePipeline = createPressurePipeline(device);
-const forcePipeline = createForcePipeline(device);
-const particlePipeline = createParticlePipeline(device);
-const renderPipeline = createRenderPipeline(device, canvasFormat);
+export function createPipeline(
+  device: GPUDevice,
+  layouts: GPUBindGroupLayout[],
+  shaderLabel: string,
+  shaderCode: string,
+  entryPoint: string = "computeMain"
+): GPUComputePipeline {
+  const shaderModule = device.createShaderModule({
+    code: shaderCode,
+    label: `${shaderLabel}Module`,
+  });
+
+  const pipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: layouts,
+  });
+
+  const pipeline = device.createComputePipeline({
+    label: `${shaderLabel}Pipeline`,
+    layout: pipelineLayout,
+    compute: {
+      module: shaderModule,
+      entryPoint,
+    },
+  });
+
+  return pipeline;
+}
+
+const assignCellPipeline = createPipeline(
+  device,
+  [assignCellLayout, assignCellWriteLayout],
+  "Assign Cell",
+  assignCellShader
+);
+const indexCellPipeline = createPipeline(
+  device,
+  [indexCellLayout, indexCellWriteLayout],
+  "Index Cell",
+  indexCellShader
+);
+const sortPipeline = createPipeline(
+  device,
+  [sortStridesLayout, sortBuffersLayout],
+  "Sort",
+  sortShader
+);
+const pressurePipeline = createPipeline(
+  device,
+  [calcPressureLayout],
+  "Calculate Pressure",
+  computePressureShader
+);
+const forcePipeline = createPipeline(
+  device,
+  [calcForceLayout],
+  "Calculate Force",
+  computeForceShader
+);
+const particlePipeline = createPipeline(
+  device,
+  [stepParticleLayout],
+  "Step Particle",
+  stepParticleShader
+);
+
+const renderPipeline = createRenderPipeline(device, renderLayout, canvasFormat);
 
 const depthTexture = device.createTexture({
   size: [canvas.width, canvas.height],
@@ -384,14 +512,15 @@ const executeComputePass = (
   encoder: GPUCommandEncoder,
   pipeline: GPUComputePipeline,
   bindGroups: GPUBindGroup[],
-  workgroupSize: number
+  workgroupSize: number,
+  n_threads: number = n_particles
 ) => {
   const pass = encoder.beginComputePass();
   pass.setPipeline(pipeline);
   for (let i = 0; i < bindGroups.length; i++) {
     pass.setBindGroup(i, bindGroups[i]);
   }
-  pass.dispatchWorkgroups(Math.ceil(n_particles / workgroupSize));
+  pass.dispatchWorkgroups(Math.ceil(n_threads / workgroupSize));
   pass.end();
 };
 
@@ -455,11 +584,14 @@ const step = async () => {
   device.queue.writeBuffer(rayOriginBuffer, 0, new Float32Array(rayOrigin));
   device.queue.writeBuffer(rayDirBuffer, 0, new Float32Array(rayDir));
 
-  const encoder = device.createCommandEncoder();
-  executeComputePass(encoder, assignCellPipeline, [assignCellBindGroup], 256);
-  [cellReadBuffer, cellWriteBuffer] = [cellWriteBuffer, cellReadBuffer];
-  [indexReadBuffer, indexWriteBuffer] = [indexWriteBuffer, indexReadBuffer];
-
+  let encoder = device.createCommandEncoder();
+  executeComputePass(
+    encoder,
+    assignCellPipeline,
+    [assignCellBindGroup, assignCellWriteBindGroups[bufferState]],
+    256
+  );
+  bufferState = 0;
   for (let i = 1; i <= n_sort_passes; i++) {
     let direction_stride = new Uint32Array([Math.pow(2, i)]);
     device.queue.writeBuffer(directionStrideBuffer, 0, direction_stride);
@@ -469,25 +601,40 @@ const step = async () => {
       executeComputePass(
         encoder,
         sortPipeline,
-        [sortStridesBindGroup, sortBindGroup],
-        256
+        [sortStridesBindGroup, sortBuffersBindGroups[bufferState]],
+        256,
+        n_sorting
       );
-      device.queue.submit([encoder.finish()]); //TODO: Remove this later
-      const result = await debugReadBuffer(
-        device,
-        indexReadBuffer,
-        n_sorting * 4
-      );
-      console.log(result);
-      debugger;
-      [cellReadBuffer, cellWriteBuffer] = [cellWriteBuffer, cellReadBuffer];
-      [indexReadBuffer, indexWriteBuffer] = [indexWriteBuffer, indexReadBuffer];
+      device.queue.submit([encoder.finish()]);
+      encoder = device.createCommandEncoder();
+      toggleBufferState();
     }
   }
 
+  //device.queue.submit([encoder.finish()]);
+  //let result = await debugReadBuffer(
+  //device,
+  //indexBuffers[bufferState],
+  //n_sorting * 4
+  //);
+  //console.log(result);
+  //debugger;
+  encoder = device.createCommandEncoder();
   encoder.copyBufferToBuffer(staticCellClearBuffer, 0, cellStartBuffer, 0);
   encoder.copyBufferToBuffer(staticCellClearBuffer, 0, cellEndBuffer, 0);
-  executeComputePass(encoder, indexCellPipeline, [indexCellBindGroup], 256);
+  executeComputePass(
+    encoder,
+    indexCellPipeline,
+    [indexCellBindGroup, indexCellWriteBindGroups[bufferState]],
+    256
+  );
+  device.queue.submit([encoder.finish()]);
+  encoder = device.createCommandEncoder();
+  //result = await debugReadBuffer(device, cellStartBuffer, n_cells * 4);
+  //console.log(result);
+  //result = await debugReadBuffer(device, cellEndBuffer, n_cells * 4);
+  //console.log(result);
+  //debugger;
   executeComputePass(encoder, pressurePipeline, [calcPressureBindGroup], 256);
   executeComputePass(encoder, forcePipeline, [calcForceBindGroup], 256);
   executeComputePass(encoder, particlePipeline, [stepParticleBindGroup], 256);

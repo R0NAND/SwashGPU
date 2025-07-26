@@ -18,11 +18,13 @@ struct SimParams{
 
 @group(0) @binding(0) var<uniform> params: SimParams;
 @group(0) @binding(1) var<storage> pos_buffer: array<vec3<f32>>;
-@group(0) @binding(2) var<storage, read_write> index_buffer: array<u32>;
-@group(0) @binding(3) var<storage, read_write> cell_buffer: array<u32>;
+@group(1) @binding(0) var<storage, read_write> index_buffer: array<u32>;
+@group(1) @binding(1) var<storage, read_write> cell_buffer: array<u32>;
 @compute @workgroup_size(256)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  if (global_id.x >= params.n){return;}
+  if (global_id.x >= params.n) {
+    return; // Out of bounds
+  }
   let pos = pos_buffer[global_id.x];
   index_buffer[global_id.x] = global_id.x;
   cell_buffer[global_id.x] = u32(pos.x / params.kernel_r) +

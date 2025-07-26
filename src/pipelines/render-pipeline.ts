@@ -1,14 +1,14 @@
-import { createRenderBindGroupLayout } from "../bind-group-layouts/render-layout";
 import vertexShader from "../vertex-shaders/mvp-shader.wgsl";
 import fragmentShader from "../fragment-shaders/particle-shader.wgsl";
 
 export const createRenderPipeline = (
   device: GPUDevice,
+  layout: GPUBindGroupLayout,
   format: GPUTextureFormat
 ) => {
   return device.createRenderPipeline({
     layout: device.createPipelineLayout({
-      bindGroupLayouts: [createRenderBindGroupLayout(device)],
+      bindGroupLayouts: [layout],
     }),
     vertex: {
       module: device.createShaderModule({
