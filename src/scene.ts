@@ -13,10 +13,6 @@ import {
 import { createRenderPipeline } from "./pipelines/render-pipeline";
 import { initGPU } from "./gpuContext";
 import { mat4, vec3, vec4 } from "gl-matrix";
-import {
-  debugUint32Buffer,
-  debugFloat32Buffer,
-} from "./util/debug/debug-utils";
 
 const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
 canvas.height = canvas.clientHeight;

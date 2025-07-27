@@ -14,7 +14,7 @@ export async function debugUint32Buffer(
 
   await readBuffer.mapAsync(GPUMapMode.READ);
   const arrayBuffer = readBuffer.getMappedRange();
-  const copy = new Uint32Array(arrayBuffer.slice());
+  const copy = new Uint32Array(arrayBuffer);
   readBuffer.unmap();
   readBuffer.destroy();
   return copy;
@@ -36,7 +36,7 @@ export async function debugFloat32Buffer(
 
   await readBuffer.mapAsync(GPUMapMode.READ);
   const arrayBuffer = readBuffer.getMappedRange();
-  const copy = new Float32Array(arrayBuffer.slice());
+  const copy = new Float32Array(arrayBuffer);
   readBuffer.unmap();
   readBuffer.destroy();
   return copy;
