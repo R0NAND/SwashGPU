@@ -14,6 +14,7 @@ struct SimParams{
   n: u32,
   gravity: vec3<f32>,
   sim_cells: vec3<u32>,
+  walls: vec3<f32>
 };
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams; 
@@ -34,7 +35,7 @@ fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
   if(global_id.x == sim_params.n - 1){
     cell_end_index[cell_index] = sim_params.n;
     if (cell_index != sorted_cells[global_id.x - 1]) {
-      cell_start_index[cell_index] = sim_params.n - 2;
+      cell_start_index[cell_index] = sim_params.n - 1;
     }
     return;
   }

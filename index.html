@@ -12,7 +12,10 @@
   <div class="main-container">
     <h1>SwashGPU</h1>
     <p>Click/Press and drag to stir the fluid.</p>
-    <canvas id="simulationCanvas"></canvas>
+    <div id="simulationContainer">
+      <canvas width="1000" height="1000" id="simulationCanvas"></canvas>
+      <label id="fps">FPS:</label>
+    </div>
   </div>
   <script type="module" src="/src/scene.ts"></script>
 </body>

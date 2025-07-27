@@ -14,6 +14,7 @@ struct SimParams{
   n: u32,
   gravity: vec3<f32>,
   sim_cells: vec3<u32>,
+  walls: vec3<f32>
 };
 
 
@@ -42,20 +43,24 @@ struct SimParams{
       positions[global_id.x].y = 0.0;
       velocities[global_id.x].y *= -0.95;
     }
+    if positions[global_id.x].y > sim_params.walls.y {
+      positions[global_id.x].y = sim_params.walls.y;
+      velocities[global_id.x].y *= -0.95;
+    }
     if positions[global_id.x].x < 0.0 {
       positions[global_id.x].x = 0.0;
       velocities[global_id.x].x *= -0.95;
     }
-    if positions[global_id.x].x > 300.0 {
-      positions[global_id.x].x = 300.0;
+    if positions[global_id.x].x > sim_params.walls.x {
+      positions[global_id.x].x = sim_params.walls.x;
       velocities[global_id.x].x *= -0.95;
     }
     if positions[global_id.x].z < 0.0 {
       positions[global_id.x].z = 0.0;
       velocities[global_id.x].z *= -0.95;
     }
-    if positions[global_id.x].z > 100.0 {
-      positions[global_id.x].z = 100.0;
+    if positions[global_id.x].z > sim_params.walls.z {
+      positions[global_id.x].z = sim_params.walls.z;
       velocities[global_id.x].z *= -0.95;
     }
     forces[global_id.x] = vec3(0.0, 0.0, 0.0);

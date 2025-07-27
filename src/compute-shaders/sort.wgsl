@@ -14,6 +14,7 @@ struct SimParams{
   n: u32,
   gravity: vec3<f32>,
   sim_cells: vec3<u32>,
+  walls: vec3<f32>
 };
 
 @group(0) @binding(0) var<uniform> sim_params: SimParams;

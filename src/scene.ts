@@ -5,18 +5,27 @@ import indexCellShader from "./compute-shaders/index-cell.wgsl";
 import computePressureShader from "./compute-shaders/compute-pressure.wgsl";
 import computeForceShader from "./compute-shaders/compute-force.wgsl";
 import stepParticleShader from "./compute-shaders/step-particle.wgsl";
+import {
+  createBindGroupFromBuffers,
+  createBindGroupsFromBufferSets,
+  createPipeline,
+} from "./util/factories";
 import { createRenderPipeline } from "./pipelines/render-pipeline";
 import { initGPU } from "./gpuContext";
 import { mat4, vec3, vec4 } from "gl-matrix";
+import {
+  debugUint32Buffer,
+  debugFloat32Buffer,
+} from "./util/debug/debug-utils";
 
 const canvas = document.getElementById("simulationCanvas") as HTMLCanvasElement;
 canvas.height = canvas.clientHeight;
 canvas.width = canvas.clientHeight;
 const spacing = 7.0;
 
-const n_x = 5; //32;
-const n_y = 5; //15;
-const n_z = 5; //12;
+const n_x = 40;
+const n_y = 15;
+const n_z = 20;
 const n_particles = n_x * n_y * n_z;
 
 const n_sorting = Math.pow(2, Math.ceil(Math.log2(n_particles)));
@@ -36,14 +45,17 @@ for (let x = 0; x < n_x; x++) {
     }
   }
 }
+const walls_x = spacing * n_x * 1.2;
+const walls_y = spacing * n_y;
+const walls_z = spacing * n_z * 1.2;
 //const mvpArray = new Float32Array(mvpMatrix.elements);
 const kernel_r = 20;
 const kernel_r2 = kernel_r * kernel_r;
 const mass = 1.0;
 const viscosity = 0.5;
 const stiffness = 1000;
-const restDensity = 0.001;
-const surfaceTension = 0.001;
+const restDensity = 0.0001;
+const surfaceTension = 0.005;
 
 const k_poly_6 = 315.0 / (64.0 * Math.PI * Math.pow(kernel_r, 9));
 const k_lap_poly_6 = 945.0 / (32.0 * Math.PI * Math.pow(kernel_r, 9));
@@ -71,9 +83,14 @@ f32[16] = 0.0; //gravity
 f32[17] = -5; //gravity
 f32[18] = 0.0; //gravity
 f32[19] = 0.0; //padding
-u32[20] = Math.ceil(300.0 / kernel_r); //sim bounds x
-u32[21] = Math.ceil(150.0 / kernel_r); //sim bounds y
-u32[22] = Math.ceil(100.0 / kernel_r); //sim bounds z
+u32[20] = Math.ceil(walls_x / kernel_r); //sim bounds x
+u32[21] = Math.ceil(walls_y / kernel_r); //sim bounds y
+u32[22] = Math.ceil(walls_z / kernel_r); //sim bounds z
+u32[23] = 0; //padding
+f32[24] = walls_x;
+f32[25] = walls_y;
+f32[26] = walls_z;
+f32[27] = 0; //padding
 
 const n_cells = u32[20] * u32[21] * u32[22];
 
@@ -83,8 +100,8 @@ const projMatrix = mat4.create();
 const mvpMatrix = mat4.create();
 
 // Camera parameters
-const eye = vec3.fromValues(125, 200, 300);
-const center = vec3.fromValues(150, 50, 50);
+const eye = vec3.fromValues(175, 250, 400);
+const center = vec3.fromValues(175, 50, 50);
 const up = vec3.fromValues(0, 1, 0);
 
 // Build view matrix
@@ -110,25 +127,26 @@ const simParamsBuffer = device.createBuffer({
 const velocityBuffer = device.createBuffer({
   label: "particle velocity buffer",
   size: velocities.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
+  usage:
+    GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_SRC, //TODO
 });
 
 const forceBuffer = device.createBuffer({
   label: "particle force buffer",
   size: forces.byteLength,
-  usage: GPUBufferUsage.STORAGE,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, //TODO
 });
 
 const densityBuffer = device.createBuffer({
   label: "particle density buffer",
   size: densities.byteLength,
-  usage: GPUBufferUsage.STORAGE,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, //TODO
 });
 
 const pressureBuffer = device.createBuffer({
   label: "particle pressure buffer",
   size: pressures.byteLength,
-  usage: GPUBufferUsage.STORAGE,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, //TODO
 });
 
 const positionBuffer = device.createBuffer({
@@ -142,7 +160,6 @@ let bufferState = 0;
 const toggleBufferState = () => {
   bufferState = bufferState === 0 ? 1 : 0;
 };
-const indices_fill_array = new Uint32Array(n_sorting).fill(0xfffffff);
 const indexBuffers = [
   device.createBuffer({
     label: "index buffer 0",
@@ -186,7 +203,7 @@ const directionStrideBuffer = device.createBuffer({
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
-const cellClearArray = new Uint32Array(n_cells).fill(0xfffffff);
+const cellClearArray = new Uint32Array(n_cells).fill(0xffffffff);
 const staticCellClearBuffer = device.createBuffer({
   label: "static cell clear buffer",
   size: n_cells * 4,
@@ -242,76 +259,7 @@ device.queue.writeBuffer(positionBuffer, 0, positions);
 device.queue.writeBuffer(projectionBuffer, 0, projMatrix as Float32Array);
 device.queue.writeBuffer(viewBuffer, 0, viewMatrix as Float32Array);
 device.queue.writeBuffer(particleOffetsBuffer, 0, quadOffsets);
-device.queue.writeBuffer(cellBuffers[0], 0, indices_fill_array);
 device.queue.writeBuffer(staticCellClearBuffer, 0, cellClearArray);
-
-type BufferBindingType = "uniform" | "storage" | "read-only-storage";
-
-function createSharedBindGroupLayout(
-  device: GPUDevice,
-  types: BufferBindingType[],
-  visibility: number
-): GPUBindGroupLayout {
-  return device.createBindGroupLayout({
-    entries: types.map((type, i) => ({
-      binding: i,
-      visibility,
-      buffer: { type: type as GPUBufferBindingType },
-    })),
-  });
-}
-
-export function createBindGroupFromBuffers(
-  device: GPUDevice,
-  buffers: GPUBuffer[],
-  types: BufferBindingType[],
-  visibility: number = GPUShaderStage.COMPUTE
-): { layout: GPUBindGroupLayout; bindGroup: GPUBindGroup } {
-  if (buffers.length !== types.length) {
-    throw new Error("buffers and types must be the same length");
-  }
-
-  const layout = createSharedBindGroupLayout(device, types, visibility);
-
-  const bindGroup = device.createBindGroup({
-    layout,
-    entries: buffers.map((buffer, i) => ({
-      binding: i,
-      resource: { buffer },
-    })),
-  });
-
-  return { layout, bindGroup };
-}
-
-export function createBindGroupsFromBufferSets(
-  device: GPUDevice,
-  bufferSets: GPUBuffer[][],
-  types: BufferBindingType[],
-  visibility: number = GPUShaderStage.COMPUTE
-): { layout: GPUBindGroupLayout; bindGroups: GPUBindGroup[] } {
-  for (const buffers of bufferSets) {
-    if (buffers.length !== types.length) {
-      throw new Error(
-        "Each buffer set must match the length of the binding types array."
-      );
-    }
-  }
-
-  const layout = createSharedBindGroupLayout(device, types, visibility);
-
-  const bindGroups = bufferSets.map((buffers) =>
-    device.createBindGroup({
-      layout,
-      entries: buffers.map((buffer, i) => ({
-        binding: i,
-        resource: { buffer },
-      })),
-    })
-  );
-
-  return { layout, bindGroups };
-}
 
 const { bindGroup: assignCellBindGroup, layout: assignCellLayout } =
   createBindGroupFromBuffers(
@@ -364,18 +312,35 @@ const { bindGroups: indexCellWriteBindGroups, layout: indexCellWriteLayout } =
     ["read-only-storage"],
     GPUShaderStage.COMPUTE
   );
+const { bindGroups: particleIndicesBindGroups, layout: particleIndicesLayout } =
+  createBindGroupsFromBufferSets(
+    device,
+    [[indexBuffers[0]], [indexBuffers[1]]],
+    ["read-only-storage"],
+    GPUShaderStage.COMPUTE
+  );
 
 const { bindGroup: calcPressureBindGroup, layout: calcPressureLayout } =
   createBindGroupFromBuffers(
     device,
     [
       simParamsBuffer,
+      cellStartBuffer,
+      cellEndBuffer,
       positionBuffer,
       velocityBuffer,
       densityBuffer,
       pressureBuffer,
     ],
-    ["uniform", "read-only-storage", "read-only-storage", "storage", "storage"],
+    [
+      "uniform",
+      "read-only-storage",
+      "read-only-storage",
+      "read-only-storage",
+      "read-only-storage",
+      "storage",
+      "storage",
+    ],
     GPUShaderStage.COMPUTE
   );
 
@@ -384,6 +349,8 @@ const { bindGroup: calcForceBindGroup, layout: calcForceLayout } =
     device,
     [
       simParamsBuffer,
+      cellStartBuffer,
+      cellEndBuffer,
       positionBuffer,
       velocityBuffer,
       densityBuffer,
@@ -392,6 +359,8 @@ const { bindGroup: calcForceBindGroup, layout: calcForceLayout } =
     ],
     [
       "uniform",
+      "read-only-storage",
+      "read-only-storage",
       "read-only-storage",
       "read-only-storage",
       "read-only-storage",
@@ -435,34 +404,6 @@ const { bindGroup: renderBindGroup, layout: renderLayout } =
     GPUShaderStage.VERTEX
   );
 
-export function createPipeline(
-  device: GPUDevice,
-  layouts: GPUBindGroupLayout[],
-  shaderLabel: string,
-  shaderCode: string,
-  entryPoint: string = "computeMain"
-): GPUComputePipeline {
-  const shaderModule = device.createShaderModule({
-    code: shaderCode,
-    label: `${shaderLabel}Module`,
-  });
-
-  const pipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: layouts,
-  });
-
-  const pipeline = device.createComputePipeline({
-    label: `${shaderLabel}Pipeline`,
-    layout: pipelineLayout,
-    compute: {
-      module: shaderModule,
-      entryPoint,
-    },
-  });
-
-  return pipeline;
-}
-
 const assignCellPipeline = createPipeline(
   device,
   [assignCellLayout, assignCellWriteLayout],
@@ -483,13 +424,13 @@ const sortPipeline = createPipeline(
 );
 const pressurePipeline = createPipeline(
   device,
-  [calcPressureLayout],
+  [calcPressureLayout, particleIndicesLayout],
   "Calculate Pressure",
   computePressureShader
 );
 const forcePipeline = createPipeline(
   device,
-  [calcForceLayout],
+  [calcForceLayout, particleIndicesLayout],
   "Calculate Force",
   computeForceShader
 );
@@ -546,28 +487,17 @@ canvas.addEventListener("pointerup", (e) => {
 });
 
 const n_sort_passes = Math.log2(n_sorting);
-async function debugReadBuffer(
-  device: GPUDevice,
-  source: GPUBuffer,
-  size: number // in bytes
-): Promise<Uint32Array> {
-  const readBuffer = device.createBuffer({
-    size,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-  });
-
-  const encoder = device.createCommandEncoder();
-  encoder.copyBufferToBuffer(source, 0, readBuffer, 0, size);
-  device.queue.submit([encoder.finish()]);
-
-  await readBuffer.mapAsync(GPUMapMode.READ);
-  const arrayBuffer = readBuffer.getMappedRange();
-  const copy = new Uint32Array(arrayBuffer.slice());
-  readBuffer.unmap();
-  readBuffer.destroy();
-  return copy;
-}
+let lastFrameTime = performance.now();
+const fpsLabel = document.getElementById("fps");
 const step = async () => {
+  const now = performance.now();
+  const deltaTime = now - lastFrameTime;
+  lastFrameTime = now;
+
+  const fps = 1000 / deltaTime;
+  if (fpsLabel) {
+    fpsLabel.textContent = `FPS: ${fps.toFixed(1)}`;
+  }
   const x = (mouseX / canvas.clientWidth) * 2 - 1;
   const y = -(mouseY / canvas.clientHeight) * 2 + 1;
   const invViewProj = mat4.invert(mat4.create(), mvpMatrix);
@@ -585,13 +515,14 @@ const step = async () => {
   device.queue.writeBuffer(rayDirBuffer, 0, new Float32Array(rayDir));
 
   let encoder = device.createCommandEncoder();
+  bufferState = 0;
   executeComputePass(
     encoder,
     assignCellPipeline,
     [assignCellBindGroup, assignCellWriteBindGroups[bufferState]],
-    256
+    256,
+    n_sorting
   );
-  bufferState = 0;
   for (let i = 1; i <= n_sort_passes; i++) {
     let direction_stride = new Uint32Array([Math.pow(2, i)]);
     device.queue.writeBuffer(directionStrideBuffer, 0, direction_stride);
@@ -611,15 +542,6 @@ const step = async () => {
     }
   }
 
-  //device.queue.submit([encoder.finish()]);
-  //let result = await debugReadBuffer(
-  //device,
-  //indexBuffers[bufferState],
-  //n_sorting * 4
-  //);
-  //console.log(result);
-  //debugger;
-  encoder = device.createCommandEncoder();
   encoder.copyBufferToBuffer(staticCellClearBuffer, 0, cellStartBuffer, 0);
   encoder.copyBufferToBuffer(staticCellClearBuffer, 0, cellEndBuffer, 0);
   executeComputePass(
@@ -628,15 +550,18 @@ const step = async () => {
     [indexCellBindGroup, indexCellWriteBindGroups[bufferState]],
     256
   );
-  device.queue.submit([encoder.finish()]);
-  encoder = device.createCommandEncoder();
-  //result = await debugReadBuffer(device, cellStartBuffer, n_cells * 4);
-  //console.log(result);
-  //result = await debugReadBuffer(device, cellEndBuffer, n_cells * 4);
-  //console.log(result);
-  //debugger;
-  executeComputePass(encoder, pressurePipeline, [calcPressureBindGroup], 256);
-  executeComputePass(encoder, forcePipeline, [calcForceBindGroup], 256);
+  executeComputePass(
+    encoder,
+    pressurePipeline,
+    [calcPressureBindGroup, particleIndicesBindGroups[bufferState]],
+    256
+  );
+  executeComputePass(
+    encoder,
+    forcePipeline,
+    [calcForceBindGroup, particleIndicesBindGroups[bufferState]],
+    256
+  );
   executeComputePass(encoder, particlePipeline, [stepParticleBindGroup], 256);
 
   const renderPass = encoder.beginRenderPass({
