@@ -28,7 +28,6 @@ canvas {
 
 #simulationContainer {
   position: relative;
-  border: 2px solid red;
 }
 
 #fps {
