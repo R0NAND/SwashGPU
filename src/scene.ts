@@ -276,13 +276,6 @@ const { bindGroups: assignCellWriteBindGroups, layout: assignCellWriteLayout } =
     GPUShaderStage.COMPUTE
   );
 
-const { bindGroup: sortStridesBindGroup, layout: sortStridesLayout } =
-  createBindGroupFromBuffers(
-    device,
-    [simParamsBuffer, counterpartStrideBuffer, directionStrideBuffer],
-    ["uniform", "uniform", "uniform"],
-    GPUShaderStage.COMPUTE
-  );
 const { bindGroups: sortBuffersBindGroups, layout: sortBuffersLayout } =
   createBindGroupsFromBufferSets(
     device,
